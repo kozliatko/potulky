@@ -61,7 +61,7 @@ app.post("/api/messages", authMiddleware, async (req, res) => {
       return res.status(400).json({ error: "Chýba pole messages." });
     }
     const response = await anthropic.messages.create({
-      model: model || "claude-haiku-4-5-20251001",
+      model: model || "claude-sonnet-4-20250514",
       max_tokens: max_tokens || 4000,
       system,
       tools,
