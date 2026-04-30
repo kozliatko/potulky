@@ -7,27 +7,48 @@ import { weatherInfo } from "../utils.js";
 // V produkcii nginx proxy presmeruje /api → backend:3001
 const API_URL = "/api/messages";
 
-const SYSTEM_PROMPT = `Si špecialistový agent pre hľadanie rodinných cyklociest. Tvoja úloha je:
+const DEFAULT_PROFILE = { hasEbike: true, hasChildren: true, hasTrailer: true };
 
-SKLADBA SKUPINY:
-- Dospelí jazdia na ELEKTROBICIYKLOCH (e-bike) — zvládnu väčšie prevýšenie a dlhšie trasy bez únavy
-- Jedno dieťa ide na vlastnom detskom bicykli — trasa musí byť bezpečná a zvládnuteľná aj pre dieťa samostatne
-- Druhé dieťa je v cyklovozíku ALEBO v cyklosedačke — pozor na: šírku chodníka (min. 1,5m pre vozík), povrch bez výmoľov, ostré zákruty, schodíky, rampy
+function buildSystemPrompt({ hasEbike, hasChildren, hasTrailer }) {
+  const lines = [];
 
-LIMIT VYHĽADÁVANÍ: Použi MAXIMÁLNE 8 web_search volaní celkovo. Buď efektívny — kombinuj viac otázok do jedného dotazu.
+  // Skladba skupiny
+  lines.push("SKLADBA SKUPINY:");
+  lines.push(`- Dospelí jazdia na ${hasEbike ? "ELEKTROBICIYKLOCH (e-bike) — zvládnu väčšie prevýšenie a dlhšie trasy bez únavy" : "bežných bicykloch — treba dbať na prevýšenie a celkovú náročnosť trasy"}`);
+  if (hasChildren && hasTrailer) {
+    lines.push("- Jedno dieťa ide na vlastnom detskom bicykli — trasa musí byť bezpečná a zvládnuteľná aj pre dieťa samostatne");
+    lines.push("- Druhé dieťa je v PRÍVESNOM VOZÍKU — kritické požiadavky: šírka chodníka min. 1,5 m, hladký povrch bez výmoľov, žiadne ostré zákruty, schodíky ani rampy");
+  } else if (hasChildren) {
+    lines.push("- Deti idú na vlastných detských bicykloch — trasy musia byť bezpečné, s miernym sklonom a zvládnuteľné pre deti");
+  }
 
-1. Vyhľadaj cyklotrasy v zadanej lokalite pomocou web_search nástroja (1-2 vyhľadávania)
+  const groupDesc = !hasChildren
+    ? "cyklistov"
+    : hasTrailer
+    ? "e-bike rodinu s deťmi a prívesným vozíkom"
+    : hasEbike
+    ? "e-bike rodinu s deťmi"
+    : "rodinu s deťmi";
+
+  // Pokyny pre agenta
+  const prompt = `Si špecializovaný agent pre hľadanie cyklociest. Tvoja úloha je nájsť ideálne trasy pre: ${groupDesc}.
+
+${lines.join("\n")}
+
+LIMIT VYHĽADÁVANÍ: Použi MAXIMÁLNE 10 web_search volaní celkovo. Buď efektívny — kombinuj viac otázok do jedného dotazu.
+
+1. Vyhľadaj cyklotrasy v zadanej lokalite pomocou web_search nástroja (2-3 vyhľadávania)
 2. Hľadaj VÝLUČNE asfaltové alebo spevnené povrchy (nie terénne trail trasy)
-3. Over trasy z dostupných zdrojov (mapy.cz, cycling.sk, openstreetmap — max 2-3 ďalšie vyhľadávania)
+3. Over trasy z dostupných zdrojov (mapy.cz, hiking.sk, cycling.sk, openstreetmap — max 3-4 ďalšie vyhľadávania)
 4. KRITICKY zhodnoť každú trasu:
-   - Bezpečnosť (intenzita premávky, cyklopruhy, oddelenie od áut)
-   - Vhodnosť pre cyklovozík/sedačku (šírka, povrch, prechodnosť)
-   - Náročnosť pre dieťa na vlastnom bicykli (prevýšenie, sklon)
+   - Bezpečnosť (intenzita premávky, cyklopruhy, oddelenie od áut)${hasTrailer ? "\n   - Vhodnosť pre prívesný vozík (šírka min. 1,5m, povrch, prechodnosť)" : ""}${hasChildren ? "\n   - Náročnosť pre deti na bicykli (prevýšenie, sklon)" : ""}
    - Povrch (asfalt = výborný, spevnená cesta = dobrý, makadám = akceptovateľný)
-   - Dĺžka (reálna pre deti: 5–30 km; e-bike rodičia zvládnu aj dlhšie)
+   - Dĺžka (${hasChildren ? "reálna pre deti: 5–30 km" : "5–60 km"}; ${hasEbike ? "e-bike zvládne aj dlhšie trasy" : "zohľadni fyzickú náročnosť"})
+   - Preferuj dedikované trasy bez áut
 5. Vyhľadaj zaujímavosti do 10 km od trás (1-2 vyhľadávania — kombinuj viaceré trasy do jedného dotazu)
 6. Odporuč TOP 3–5 trás
 7. Pre každú trasu uveď presné GPS súradnice štartu (startLat, startLng) a celkové centrum oblasti (centerLat, centerLng)
+8. Odpovedaj výlučne po slovensky
 
 DÔLEŽITÉ: Odpoveď vráť VÝLUČNE ako čistý JSON objekt bez akýchkoľvek markdown backticks ani vysvetlení:
 {
@@ -41,26 +62,26 @@ DÔLEŽITÉ: Odpoveď vráť VÝLUČNE ako čistý JSON objekt bez akýchkoľvek
       "surface": "Asfalt / Spevnená cesta / Zmiešaný",
       "difficulty": "Ľahká / Stredná / Ťažká",
       "elevation": "X m prevýšenia",
-      "highlights": "Čo je zaujímavé na trase",
-      "trailerFriendly": "Áno / Čiastočne / Nie — dôvod",
-      "childFriendlyScore": 8,
+      "highlights": "Čo je zaujímavé na trase",${hasTrailer ? '\n      "trailerFriendly": "Áno / Čiastočne / Nie — dôvod",' : ""}${hasChildren ? '\n      "childFriendlyScore": 8,' : ""}
       "startLat": 48.736,
       "startLng": 19.146,
       "sources": ["zdroj1", "zdroj2"],
       "warnings": "Prípadné upozornenia alebo null",
-      "recommendation": "Prečo túto trasu odporúčam pre e-bike rodinu s deťmi",
+      "recommendation": "Prečo túto trasu odporúčam pre ${groupDesc}",
       "pointsOfInterest": [
         {
           "name": "Názov zaujímavosti",
           "type": "hrad / ihrisko / kúpalisko / reštaurácia / príroda / múzeum / rozhľadňa",
           "distance": "X km od trasy",
-          "description": "Krátky popis prečo je vhodné pre rodinu"
+          "description": "Krátky popis"
         }
       ]
     }
   ],
-  "generalTips": "Všeobecné tipy pre e-bike rodinu s deťmi a cyklovozíkom v tejto oblasti"
+  "generalTips": "Všeobecné tipy pre ${groupDesc} v tejto oblasti"
 }`;
+  return prompt;
+}
 
 // ─── Pomocné konštanty ───────────────────────────────────────────────────────
 const ROUTE_COLORS = ["#4ade80", "#60a5fa", "#f472b6", "#fb923c", "#a78bfa"];
@@ -197,6 +218,13 @@ export default function BikeAgent() {
   const [phase,    setPhase]    = useState("idle");
   const [result,   setResult]   = useState(null);
   const [error,    setError]    = useState(null);
+  const [profile,  setProfile]  = useState(DEFAULT_PROFILE);
+
+  const toggleProfile = key => setProfile(p => {
+    const next = { ...p, [key]: !p[key] };
+    if (!next.hasChildren) next.hasTrailer = false;
+    return next;
+  });
 
   const phases     = ["Hľadám trasy", "Overujem zdroje", "Hodnotím vhodnosť"];
   const phaseIndex = phase === "searching" ? 0 : phase === "verifying" ? 1 : phase === "analyzing" ? 2 : -1;
@@ -215,17 +243,25 @@ export default function BikeAgent() {
         headers["x-api-token"] = import.meta.env.VITE_API_SECRET_TOKEN;
       }
 
+      const groupDesc = !profile.hasChildren
+        ? "cyklistov"
+        : profile.hasTrailer
+        ? "e-bike rodinu s deťmi a prívesným vozíkom"
+        : profile.hasEbike
+        ? "e-bike rodinu s deťmi"
+        : "rodinu s deťmi";
+
       const response = await fetch(API_URL, {
         method:  "POST",
         headers,
         body: JSON.stringify({
           model:      "claude-sonnet-4-20250514",
           max_tokens: 4000,
-          system:     SYSTEM_PROMPT,
+          system:     buildSystemPrompt(profile),
           tools:      [{ type: "web_search_20250305", name: "web_search" }],
           messages:   [{
             role:    "user",
-            content: `Nájdi rodinné cyklotrasy pre e-bike rodinu s deťmi v okolí: ${location}. Nezabudni na GPS súradnice každej trasy a centrum oblasti.`,
+            content: `Nájdi cyklotrasy pre ${groupDesc} v okolí: ${location}. Nezabudni na GPS súradnice každej trasy a centrum oblasti.`,
           }],
         }),
       });
@@ -276,9 +312,39 @@ export default function BikeAgent() {
           BikeAgent
         </h1>
         <p style={{ margin: 0, color: "#5a9a6a", fontStyle: "italic", fontSize: "0.9rem" }}>
-          Rodinné cyklotrasy · E-bike · Mapa · Predpoveď počasia
+          Cyklotrasy na mieru · Mapa · Predpoveď počasia
         </p>
       </header>
+
+      {/* Profil skupiny */}
+      <div style={{ maxWidth: "620px", margin: "0 auto 1.6rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center", animation: "fadeUp 0.6s ease 0.05s both" }}>
+        {[
+          { key: "hasEbike",    label: "⚡ E-bike",         depends: null },
+          { key: "hasChildren", label: "👨‍👩‍👧 Deti",            depends: null },
+          { key: "hasTrailer",  label: "🛻 Prívesný vozík", depends: "hasChildren" },
+        ].map(({ key, label, depends }) => {
+          const disabled = depends && !profile[depends];
+          const active   = !disabled && profile[key];
+          return (
+            <button
+              key={key}
+              onClick={() => !disabled && toggleProfile(key)}
+              title={disabled ? "Najprv zapni Deti" : undefined}
+              style={{
+                padding: "0.45rem 1.05rem", borderRadius: "20px", border: "1.5px solid",
+                borderColor: disabled ? "#1a3325" : active ? "#22c55e" : "#2a4a35",
+                background:  disabled ? "rgba(255,255,255,0.02)" : active ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.04)",
+                color:       disabled ? "#2a4a35" : active ? "#86efac" : "#5a9a6a",
+                fontSize: "0.85rem", cursor: disabled ? "default" : "pointer",
+                fontFamily: "inherit", transition: "all 0.2s",
+                opacity: disabled ? 0.5 : 1,
+              }}
+            >
+              {active && !disabled ? "✓ " : ""}{label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Hľadanie */}
       <div style={{ maxWidth: "620px", margin: "0 auto 2.5rem", display: "flex", gap: "0.75rem", animation: "fadeUp 0.6s ease 0.1s both" }}>
@@ -341,9 +407,11 @@ export default function BikeAgent() {
                   <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#fde68a", fontWeight: "normal" }}>
                     <span style={{ color: ROUTE_COLORS[i % ROUTE_COLORS.length], marginRight: "0.5rem", fontFamily: "monospace" }}>{i + 1}.</span>{route.name}
                   </h3>
-                  <div style={{ padding: "0.25rem 0.85rem", borderRadius: "20px", background: `${scoreColor(route.childFriendlyScore)}18`, border: `1px solid ${scoreColor(route.childFriendlyScore)}55`, fontSize: "0.82rem", color: scoreColor(route.childFriendlyScore), fontFamily: "monospace" }}>
-                    👶 {route.childFriendlyScore}/10
-                  </div>
+                  {profile.hasChildren && route.childFriendlyScore != null && (
+                    <div style={{ padding: "0.25rem 0.85rem", borderRadius: "20px", background: `${scoreColor(route.childFriendlyScore)}18`, border: `1px solid ${scoreColor(route.childFriendlyScore)}55`, fontSize: "0.82rem", color: scoreColor(route.childFriendlyScore), fontFamily: "monospace" }}>
+                      👶 {route.childFriendlyScore}/10
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", marginBottom: "0.9rem" }}>
@@ -351,12 +419,12 @@ export default function BikeAgent() {
                     <span key={t.val} style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid #1e4d2b", fontSize: "0.82rem", color: "#9ec9aa" }}>{t.icon} {t.val}</span>
                   ))}
                   <span style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: `${diffColor(route.difficulty)}12`, border: `1px solid ${diffColor(route.difficulty)}44`, fontSize: "0.82rem", color: diffColor(route.difficulty) }}>💪 {route.difficulty}</span>
-                  <span style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.35)", fontSize: "0.82rem", color: "#c4b5fd" }}>⚡ E-bike</span>
+                  {profile.hasEbike && <span style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.35)", fontSize: "0.82rem", color: "#c4b5fd" }}>⚡ E-bike</span>}
                 </div>
 
-                {route.trailerFriendly && (
+                {profile.hasTrailer && route.trailerFriendly && (
                   <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.9rem", borderRadius: "10px", marginBottom: "0.8rem", background: route.trailerFriendly.startsWith("Áno") ? "rgba(74,222,128,0.1)" : route.trailerFriendly.startsWith("Čias") ? "rgba(251,191,36,0.1)" : "rgba(248,113,113,0.1)", border: `1px solid ${route.trailerFriendly.startsWith("Áno") ? "rgba(74,222,128,0.35)" : route.trailerFriendly.startsWith("Čias") ? "rgba(251,191,36,0.35)" : "rgba(248,113,113,0.35)"}`, fontSize: "0.82rem", color: route.trailerFriendly.startsWith("Áno") ? "#4ade80" : route.trailerFriendly.startsWith("Čias") ? "#fbbf24" : "#f87171" }}>
-                    🛻 Cyklovozík / sedačka: {route.trailerFriendly}
+                    🛻 Prívesný vozík: {route.trailerFriendly}
                   </div>
                 )}
 
@@ -400,7 +468,9 @@ export default function BikeAgent() {
 
           {result.generalTips && (
             <div style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: "16px", padding: "1.2rem 1.5rem", marginBottom: "2rem" }}>
-              <h4 style={{ margin: "0 0 0.5rem", color: "#fde68a", fontWeight: "normal", fontSize: "0.95rem" }}>🌿 Tipy pre e-bike rodinu s deťmi</h4>
+              <h4 style={{ margin: "0 0 0.5rem", color: "#fde68a", fontWeight: "normal", fontSize: "0.95rem" }}>
+                🌿 Tipy pre {!profile.hasChildren ? "cyklistov" : profile.hasTrailer ? "e-bike rodinu s prívesným vozíkom" : profile.hasEbike ? "e-bike rodinu s deťmi" : "rodinu s deťmi"}
+              </h4>
               <p style={{ margin: 0, color: "#9ec9aa", lineHeight: 1.65, fontSize: "0.88rem" }}>{result.generalTips}</p>
             </div>
           )}
