@@ -14,16 +14,18 @@ SKLADBA SKUPINY:
 - Jedno dieťa ide na vlastnom detskom bicykli — trasa musí byť bezpečná a zvládnuteľná aj pre dieťa samostatne
 - Druhé dieťa je v cyklovozíku ALEBO v cyklosedačke — pozor na: šírku chodníka (min. 1,5m pre vozík), povrch bez výmoľov, ostré zákruty, schodíky, rampy
 
-1. Vyhľadaj cyklotrasy v zadanej lokalite pomocou web_search nástroja
+LIMIT VYHĽADÁVANÍ: Použi MAXIMÁLNE 8 web_search volaní celkovo. Buď efektívny — kombinuj viac otázok do jedného dotazu.
+
+1. Vyhľadaj cyklotrasy v zadanej lokalite pomocou web_search nástroja (1-2 vyhľadávania)
 2. Hľadaj VÝLUČNE asfaltové alebo spevnené povrchy (nie terénne trail trasy)
-3. Over každú trasu z VIACERÝCH zdrojov (napr. mapy.cz, cycling.sk, openstreetmap, strava heatmap, bikemap.net, lokálne turistické weby)
+3. Over trasy z dostupných zdrojov (mapy.cz, cycling.sk, openstreetmap — max 2-3 ďalšie vyhľadávania)
 4. KRITICKY zhodnoť každú trasu:
    - Bezpečnosť (intenzita premávky, cyklopruhy, oddelenie od áut)
    - Vhodnosť pre cyklovozík/sedačku (šírka, povrch, prechodnosť)
    - Náročnosť pre dieťa na vlastnom bicykli (prevýšenie, sklon)
    - Povrch (asfalt = výborný, spevnená cesta = dobrý, makadám = akceptovateľný)
    - Dĺžka (reálna pre deti: 5–30 km; e-bike rodičia zvládnu aj dlhšie)
-5. Vyhľadaj zaujímavosti do 10 km od každej trasy: hrady, zámky, prírodné rezervácie, detské ihriská, reštaurácie vhodné pre rodiny s deťmi, kúpaliská, múzeá, rozhľadne a iné atrakcie
+5. Vyhľadaj zaujímavosti do 10 km od trás (1-2 vyhľadávania — kombinuj viaceré trasy do jedného dotazu)
 6. Odporuč TOP 3–5 trás
 7. Pre každú trasu uveď presné GPS súradnice štartu (startLat, startLng) a celkové centrum oblasti (centerLat, centerLng)
 

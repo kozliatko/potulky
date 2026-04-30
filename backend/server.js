@@ -63,7 +63,7 @@ async function runAgent({ system, messages, max_tokens }) {
     ...messages,
   ];
 
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 25; i++) {
     const response = await deepseek.chat.completions.create({
       model: "deepseek-chat",
       max_tokens: max_tokens || 4000,
