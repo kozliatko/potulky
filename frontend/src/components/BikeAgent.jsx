@@ -454,14 +454,26 @@ export default function BikeAgent() {
                   </div>
                 )}
 
-                {route.sources?.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.8rem", borderTop: "1px solid #1a3d26", paddingTop: "0.7rem" }}>
-                    <span style={{ fontSize: "0.74rem", color: "#3d6b4a", alignSelf: "center" }}>Zdroje:</span>
-                    {route.sources.map(src => (
-                      <span key={src} style={{ padding: "0.15rem 0.6rem", borderRadius: "6px", background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.3)", fontSize: "0.74rem", color: "#a5b4fc" }}>🔗 {src}</span>
-                    ))}
-                  </div>
-                )}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.8rem", borderTop: "1px solid #1a3d26", paddingTop: "0.7rem", alignItems: "center" }}>
+                  {route.startLat && route.startLng && (
+                    <a
+                      href={`https://mapy.cz/cyklo?x=${route.startLng}&y=${route.startLat}&z=15&source=coor&id=${route.startLng},${route.startLat}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(234,88,12,0.12)", border: "1px solid rgba(234,88,12,0.4)", fontSize: "0.8rem", color: "#fb923c", textDecoration: "none" }}
+                    >
+                      🗺️ Otvoriť v Mapy.cz
+                    </a>
+                  )}
+                  {route.sources?.length > 0 && (
+                    <>
+                      <span style={{ fontSize: "0.74rem", color: "#3d6b4a" }}>Zdroje:</span>
+                      {route.sources.map(src => (
+                        <span key={src} style={{ padding: "0.15rem 0.6rem", borderRadius: "6px", background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.3)", fontSize: "0.74rem", color: "#a5b4fc" }}>🔗 {src}</span>
+                      ))}
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
