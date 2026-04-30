@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"REMINDER: Bol vykonaný git commit. Pregeneruj README.md dokumentáciu ak sa zmenila architektúra, API, konfigurácia alebo štruktúra projektu.\"}}'",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
