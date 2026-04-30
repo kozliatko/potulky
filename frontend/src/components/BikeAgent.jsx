@@ -192,7 +192,7 @@ function WeatherForecast({ lat, lng }) {
 }
 
 // ─── Hlavný komponent ────────────────────────────────────────────────────────
-export default function CycloAgent() {
+export default function BikeAgent() {
   const [location, setLocation] = useState("");
   const [phase,    setPhase]    = useState("idle");
   const [result,   setResult]   = useState(null);
@@ -273,7 +273,7 @@ export default function CycloAgent() {
       <header style={{ textAlign: "center", marginBottom: "2.5rem", animation: "fadeUp 0.6s ease" }}>
         <div style={{ fontSize: "2.8rem", marginBottom: "0.6rem", filter: "drop-shadow(0 0 20px #22c55e66)" }}>🚴‍♀️</div>
         <h1 style={{ margin: "0 0 0.35rem", fontSize: "clamp(1.8rem, 5vw, 2.8rem)", fontWeight: "normal", letterSpacing: "0.08em", background: "linear-gradient(100deg, #86efac 30%, #fde68a 80%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-          CycloAgent
+          BikeAgent
         </h1>
         <p style={{ margin: 0, color: "#5a9a6a", fontStyle: "italic", fontSize: "0.9rem" }}>
           Rodinné cyklotrasy · E-bike · Mapa · Predpoveď počasia
