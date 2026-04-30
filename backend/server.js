@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -9,13 +9,94 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Za reverzným proxy (nginx, Caddy, Docker bridge)
 app.set("trust proxy", 1);
 
-// ─── Anthropic klient ────────────────────────────────────────────────────────
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+// ─── DeepSeek klient (OpenAI-compatible API) ─────────────────────────────────
+const deepseek = new OpenAI({
+  apiKey: process.env.DEEPSEEK_API_KEY,
+  baseURL: "https://api.deepseek.com",
 });
+
+// ─── Tavily web search ────────────────────────────────────────────────────────
+async function tavilySearch(query) {
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      api_key: process.env.TAVILY_API_KEY,
+      query,
+      search_depth: "basic",
+      max_results: 5,
+      include_answer: true,
+    }),
+  });
+  if (!res.ok) throw new Error(`Tavily error: ${res.status}`);
+  const data = await res.json();
+  const results = (data.results || [])
+    .map(r => `**${r.title}**\n${r.url}\n${r.content}`)
+    .join("\n\n---\n\n");
+  return data.answer ? `${data.answer}\n\n${results}` : results;
+}
+
+// ─── Definícia nástroja pre DeepSeek ─────────────────────────────────────────
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "web_search",
+      description: "Vyhľadaj aktuálne informácie na webe",
+      parameters: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Vyhľadávací dotaz" },
+        },
+        required: ["query"],
+      },
+    },
+  },
+];
+
+// ─── Agentic loop ─────────────────────────────────────────────────────────────
+async function runAgent({ system, messages, max_tokens }) {
+  const history = [
+    { role: "system", content: system },
+    ...messages,
+  ];
+
+  for (let i = 0; i < 10; i++) {
+    const response = await deepseek.chat.completions.create({
+      model: "deepseek-chat",
+      max_tokens: max_tokens || 4000,
+      tools: TOOLS,
+      tool_choice: "auto",
+      messages: history,
+    });
+
+    const msg = response.choices[0].message;
+    history.push(msg);
+
+    if (!msg.tool_calls || msg.tool_calls.length === 0) {
+      return msg.content;
+    }
+
+    for (const call of msg.tool_calls) {
+      const { query } = JSON.parse(call.function.arguments);
+      let result;
+      try {
+        result = await tavilySearch(query);
+      } catch (err) {
+        result = `Chyba vyhľadávania: ${err.message}`;
+      }
+      history.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: result,
+      });
+    }
+  }
+
+  throw new Error("Agent prekročil maximálny počet krokov.");
+}
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "1mb" }));
@@ -24,7 +105,6 @@ app.use(cors({
   methods: ["GET", "POST"],
 }));
 
-// Rate limiting
 const limiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
@@ -34,7 +114,6 @@ const limiter = rateLimit({
 });
 app.use("/api/", limiter);
 
-// Voliteľná ochrana tajným tokenom
 const authMiddleware = (req, res, next) => {
   if (!process.env.API_SECRET_TOKEN) return next();
   const token = req.headers["x-api-token"];
@@ -56,33 +135,25 @@ app.get("/health", (req, res) => {
 
 app.post("/api/messages", authMiddleware, async (req, res) => {
   try {
-    const { model, max_tokens, system, tools, messages } = req.body;
+    const { system, messages, max_tokens } = req.body;
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: "Chýba pole messages." });
     }
-    const response = await anthropic.messages.create({
-      model: model || "claude-haiku-4-5-20251001",
-      max_tokens: max_tokens || 4000,
-      system,
-      tools,
-      messages,
-    });
-    res.json(response);
+
+    const text = await runAgent({ system, messages, max_tokens });
+
+    // Vrátime rovnaký formát ako Anthropic API, aby frontend netreba meniť
+    res.json({ content: [{ type: "text", text }] });
   } catch (err) {
-    console.error("[Anthropic Error]", err.message);
-    if (err.status) {
-      return res.status(err.status).json({ error: err.message });
-    }
-    res.status(500).json({ error: "Interná chyba servera." });
+    console.error("[DeepSeek Error]", err.message);
+    res.status(500).json({ error: err.message || "Interná chyba servera." });
   }
 });
 
-// API 404 — nechytaj SPA fallbackom
 app.use("/api/", (req, res) => {
   res.status(404).json({ error: "Endpoint nenájdený." });
 });
 
-// SPA fallback — všetky ostatné cesty vrátia index.html
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
@@ -90,12 +161,9 @@ app.get("*", (req, res) => {
 // ─── Spustenie ──────────────────────────────────────────────────────────────
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   app.listen(PORT, () => {
-    console.log(`✅ CycloAgent beží na porte ${PORT}`);
+    console.log(`✅ CycloAgent (DeepSeek) beží na porte ${PORT}`);
     console.log(`   NODE_ENV: ${process.env.NODE_ENV || "development"}`);
-    console.log(`   Statické súbory: ${publicDir}`);
-    if (process.env.API_SECRET_TOKEN) {
-      console.log(`   Auth token: aktívny`);
-    }
+    if (process.env.API_SECRET_TOKEN) console.log(`   Auth token: aktívny`);
   });
 }
 
