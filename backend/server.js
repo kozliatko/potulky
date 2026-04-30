@@ -90,7 +90,7 @@ app.get("*", (req, res) => {
 // ─── Spustenie ──────────────────────────────────────────────────────────────
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   app.listen(PORT, () => {
-    console.log(`✅ CycloAgent beží na porte ${PORT}`);
+    console.log(`✅ BikeAgent beží na porte ${PORT}`);
     console.log(`   NODE_ENV: ${process.env.NODE_ENV || "development"}`);
     console.log(`   Statické súbory: ${publicDir}`);
     if (process.env.API_SECRET_TOKEN) {

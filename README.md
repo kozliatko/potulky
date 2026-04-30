@@ -1,4 +1,4 @@
-# 🚴 CycloAgent
+# 🚴 BikeAgent
 
 AI agent pre hľadanie rodinných cyklociest. Vyhľadáva asfaltové trasy vhodné pre e-bike rodinu s deťmi, zobrazuje ich na mape a pridáva predpoveď počasia.
 
@@ -107,7 +107,7 @@ cyclo-agent/
     │   ├── main.jsx
     │   ├── App.jsx
     │   └── components/
-    │       └── CycloAgent.jsx  # hlavný komponent
+    │       └── BikeAgent.jsx  # hlavný komponent
     ├── index.html
     ├── vite.config.js
     ├── package.json

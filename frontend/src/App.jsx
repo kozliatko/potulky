@@ -1,5 +1,5 @@
-import CycloAgent from "./components/CycloAgent.jsx";
+import BikeAgent from "./components/BikeAgent.jsx";
 
 export default function App() {
-  return <CycloAgent />;
+  return <BikeAgent />;
 }
