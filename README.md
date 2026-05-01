@@ -398,39 +398,38 @@ docker compose logs app
 
 ## HTTPS (produkcia)
 
-Caddy beží ako samostatný kontajner a terminuje TLS pred `app` kontajnerom.
+Caddy beží ako samostatný kontajner, terminuje TLS a automaticky získava certifikát od Let's Encrypt.
 
 ### Štruktúra
 
 ```
 Internet
-  :80  ──► cyclo-caddy ──► HTTP 301 → HTTPS
+  :80  ──► cyclo-caddy ──► HTTP → HTTPS redirect (automatický)
   :443 ──► cyclo-caddy ──► reverse_proxy app:3001 (interná sieť)
+                │
+                └── Let's Encrypt ACME (certifikát uložený vo volume caddy_data)
 ```
 
-### Pridanie certifikátu
+### Požiadavky
 
-Vlož súbory do adresára `certs/` v koreni projektu:
+- Doména `bike.kozliatko.sk` musí smerovať DNS A záznam na IP servera
+- Porty 80 a 443 musia byť dostupné z internetu (ACME HTTP-01 challenge)
 
+### Konfigurácia
+
+V `.env` nastav e-mail pre notifikácie o expirácii certifikátu:
+
+```env
+CADDY_ACME_EMAIL=tvoj@email.sk
 ```
-certs/
-├── cert.pem    ← certifikát (vrátane chain, ak treba)
-└── key.pem     ← privátny kľúč
-```
-
-Súbory sú namountované read-only do `/etc/caddy/certs/` v Caddy kontajneri.  
-**`certs/*.pem` je v `.gitignore` — nikdy sa nedostanú do repozitára.**
 
 ### Spustenie
 
 ```bash
-# Prvé spustenie (alebo po zmene certifikátu)
+# Prvé spustenie — Caddy automaticky získa certifikát
 docker compose up -d --build
 
-# Reload po výmene certifikátu (bez reštartu)
-docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
-
-# Logy Caddy
+# Logy Caddy (vrátane ACME komunikácie)
 docker compose logs -f caddy
 
 # Access logy (JSON formát, rotácia 10 MB × 5)
@@ -441,8 +440,9 @@ docker compose exec caddy tail -f /var/log/caddy/access.log
 
 | Funkcia | Detail |
 |---------|--------|
-| TLS terminácia | Manuálny `cert.pem` + `key.pem` z `./certs/` |
-| HTTP → HTTPS | 301 redirect na všetky `:80` požiadavky |
+| TLS certifikát | Automaticky cez Let's Encrypt (ACME), uložený vo volume `caddy_data` |
+| Obnova certifikátu | Automatická — Caddy obnoví pred expiráciou bez reštartu |
+| HTTP → HTTPS | Automatický redirect, nie je potrebný explicitný `:80` blok |
 | Reverse proxy | Prepošle na `app:3001`, timeout 120 s (AI vyhľadávania) |
 | Kompresia | gzip pre HTML/JS/CSS/JSON |
 | Security hlavičky | HSTS (1 rok), X-Content-Type-Options, X-Frame-Options, Referrer-Policy |
@@ -462,7 +462,5 @@ app:
 
 | Súbor | Popis |
 |-------|-------|
-| `caddy/Caddyfile` | Caddy konfigurácia |
+| `caddy/Caddyfile` | Caddy konfigurácia — doménový blok `bike.kozliatko.sk` |
 | `caddy/Dockerfile` | `FROM caddy:2-alpine` + `COPY Caddyfile` |
-| `certs/cert.pem` | TLS certifikát (doplniť ručne, nie v gite) |
-| `certs/key.pem` | TLS privátny kľúč (doplniť ručne, nie v gite) |
