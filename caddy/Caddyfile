@@ -1,17 +1,15 @@
 {
-    # Automatický HTTPS vypnutý — certifikát spravujeme ručne
-    auto_https off
+    # Let's Encrypt — notifikácie o expirácii certifikátu
+    email {$CADDY_ACME_EMAIL}
     admin off
 }
 
-# HTTPS endpoint
-:443 {
-    tls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem
+bike.kozliatko.sk {
+    # Caddy si automaticky získa a obnoví TLS certifikát (Let's Encrypt)
 
     encode gzip
 
     reverse_proxy app:3001 {
-        header_up X-Forwarded-For {remote_host}
         header_up X-Forwarded-Proto https
         # Timeout pre dlhé AI vyhľadávania (DeepSeek môže trvať 60s+)
         transport http {
@@ -25,7 +23,6 @@
         X-Content-Type-Options "nosniff"
         X-Frame-Options "SAMEORIGIN"
         Referrer-Policy "strict-origin-when-cross-origin"
-        # Skryj server hlavičku
         -Server
     }
 
@@ -36,9 +33,4 @@
         }
         format json
     }
-}
-
-# HTTP → HTTPS redirect
-:80 {
-    redir https://{host}{uri} 301
 }

@@ -27,9 +27,12 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      # E-mail pre Let's Encrypt notifikácie o expirácii
+      - CADDY_ACME_EMAIL=${CADDY_ACME_EMAIL}
     volumes:
-      # Sem vlož cert.pem a key.pem
-      - ./certs:/etc/caddy/certs:ro
+      # Let's Encrypt certifikáty — musia byť perzistentné (inak Caddy žiada nový cert pri každom reštarte)
+      - caddy_data:/data
       - caddy_logs:/var/log/caddy
     depends_on:
       - app
@@ -40,4 +43,6 @@ networks:
   internal:
 
 volumes:
+  # Uloženie Let's Encrypt certifikátov medzi reštartmi
+  caddy_data:
   caddy_logs:
