@@ -118,6 +118,31 @@ POST /api/messages  { system, messages, max_tokens }
 
 ---
 
+### PWA
+
+Aplikácia spĺňa požiadavky Progressive Web App — dá sa nainštalovať na domovskú obrazovku telefónu alebo desktopu.
+
+| Súčasť | Popis |
+|--------|-------|
+| `vite-plugin-pwa` | Plugin generuje service worker (Workbox) a `manifest.webmanifest` počas buildu |
+| `manifest.webmanifest` | Názov, ikona, téma (#059669), `display: standalone`, jazyk SK |
+| `sw.js` + `workbox-*.js` | Service worker s precache statických assets a runtime cache stratégiami |
+| Ikony | 64 / 192 / 512 px PNG + maskable 512 px + Apple Touch 180 px + favicon.ico |
+
+**Cache stratégie (Workbox):**
+
+| URL vzor | Stratégia | Detail |
+|----------|-----------|--------|
+| `/api/*` | NetworkOnly | Vyhľadávanie AI vždy cez sieť |
+| `api.open-meteo.com` | NetworkFirst | Počasie, cache 1 hod, max 20 záznamov |
+| `*.tile.openstreetmap.org` | CacheFirst | Mapové dlaždice, cache 7 dní, max 500 |
+| Statické assets | Precache | JS, CSS, HTML, PNG, SVG, ICO, WOFF2 |
+
+**Inštalácia na iOS:** Safari → Zdieľať → Pridať na domovskú obrazovku  
+**Inštalácia na Android/Desktop:** Chrome → adresný riadok → ikona inštalácie
+
+---
+
 ### Backend — middleware a routes
 
 **`backend/server.js`**
@@ -373,12 +398,71 @@ docker compose logs app
 
 ## HTTPS (produkcia)
 
-Odporúčame Caddy ako reverse proxy pred Docker kontajnerom:
+Caddy beží ako samostatný kontajner a terminuje TLS pred `app` kontajnerom.
+
+### Štruktúra
 
 ```
-bikeagent.tvoja-domena.sk {
-    reverse_proxy localhost:8080
-}
+Internet
+  :80  ──► cyclo-caddy ──► HTTP 301 → HTTPS
+  :443 ──► cyclo-caddy ──► reverse_proxy app:3001 (interná sieť)
 ```
 
-Caddy vyrieši SSL certifikát automaticky cez Let's Encrypt.
+### Pridanie certifikátu
+
+Vlož súbory do adresára `certs/` v koreni projektu:
+
+```
+certs/
+├── cert.pem    ← certifikát (vrátane chain, ak treba)
+└── key.pem     ← privátny kľúč
+```
+
+Súbory sú namountované read-only do `/etc/caddy/certs/` v Caddy kontajneri.  
+**`certs/*.pem` je v `.gitignore` — nikdy sa nedostanú do repozitára.**
+
+### Spustenie
+
+```bash
+# Prvé spustenie (alebo po zmene certifikátu)
+docker compose up -d --build
+
+# Reload po výmene certifikátu (bez reštartu)
+docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+
+# Logy Caddy
+docker compose logs -f caddy
+
+# Access logy (JSON formát, rotácia 10 MB × 5)
+docker compose exec caddy tail -f /var/log/caddy/access.log
+```
+
+### Čo Caddy robí
+
+| Funkcia | Detail |
+|---------|--------|
+| TLS terminácia | Manuálny `cert.pem` + `key.pem` z `./certs/` |
+| HTTP → HTTPS | 301 redirect na všetky `:80` požiadavky |
+| Reverse proxy | Prepošle na `app:3001`, timeout 120 s (AI vyhľadávania) |
+| Kompresia | gzip pre HTML/JS/CSS/JSON |
+| Security hlavičky | HSTS (1 rok), X-Content-Type-Options, X-Frame-Options, Referrer-Policy |
+| Access log | JSON, `/var/log/caddy/access.log`, rotácia 10 MB, 5 súborov |
+
+### Debug — priamy prístup bez Caddy
+
+V `docker-compose.yml` odkomentuj `ports` pri `app` service:
+
+```yaml
+app:
+  ports:
+    - "8080:3001"
+```
+
+### Konfiguračné súbory
+
+| Súbor | Popis |
+|-------|-------|
+| `caddy/Caddyfile` | Caddy konfigurácia |
+| `caddy/Dockerfile` | `FROM caddy:2-alpine` + `COPY Caddyfile` |
+| `certs/cert.pem` | TLS certifikát (doplniť ručne, nie v gite) |
+| `certs/key.pem` | TLS privátny kľúč (doplniť ručne, nie v gite) |
