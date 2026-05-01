@@ -236,6 +236,7 @@ export default function BikeAgent() {
   const [profile,  setProfile]  = useState(DEFAULT_PROFILE);
   const [usage,    setUsage]    = useState(null);
   const [filters,  setFilters]  = useState({ difficulty: [], minScore: 0, trailerOnly: false });
+  const [activeTab, setActiveTab] = useState(0);
   const [history,  setHistory]  = useState(() => {
     try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
   });
@@ -246,7 +247,7 @@ export default function BikeAgent() {
     return next;
   });
 
-  const resetFilters = () => setFilters({ difficulty: [], minScore: 0, trailerOnly: false });
+  const resetFilters = () => { setFilters({ difficulty: [], minScore: 0, trailerOnly: false }); setActiveTab(0); };
 
   const toggleDifficulty = d => setFilters(f => ({
     ...f,
@@ -318,6 +319,7 @@ export default function BikeAgent() {
 
       setResult(parsed);
       setUsage(usageData);
+      setActiveTab(0);
       resetFilters();
 
       // Uloženie do histórie
@@ -513,89 +515,116 @@ export default function BikeAgent() {
             <RouteMap routes={result.routes || []} centerLat={result.centerLat} centerLng={result.centerLng} />
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.3rem", marginBottom: "2rem" }}>
-            {filteredRoutes.length === 0 && (
-              <div style={{ textAlign: "center", padding: "2rem", color: "#3d6b4a", fontStyle: "italic" }}>
-                Žiadne trasy nevyhovujú aktívnym filtrom.
-              </div>
-            )}
-            {filteredRoutes.map((route, i) => (
-              <div key={i} className="route-card" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid #1e4d2b", borderLeft: `4px solid ${ROUTE_COLORS[i % ROUTE_COLORS.length]}`, borderRadius: "18px", padding: "1.4rem 1.6rem", transition: "border-color 0.2s" }}>
+          {/* Taby */}
+          {filteredRoutes.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "2rem", color: "#3d6b4a", fontStyle: "italic", marginBottom: "2rem" }}>
+              Žiadne trasy nevyhovujú aktívnym filtrom.
+            </div>
+          ) : (() => {
+            const tabIdx = Math.min(activeTab, filteredRoutes.length - 1);
+            const route  = filteredRoutes[tabIdx];
+            const color  = ROUTE_COLORS[tabIdx % ROUTE_COLORS.length];
+            return (
+              <div style={{ marginBottom: "2rem" }}>
+                {/* Tab hlavičky */}
+                <div style={{ display: "flex", gap: "0", overflowX: "auto", marginBottom: "0", borderBottom: "2px solid #1a3d26", paddingBottom: "0" }}>
+                  {filteredRoutes.map((r, i) => {
+                    const c      = ROUTE_COLORS[i % ROUTE_COLORS.length];
+                    const active = i === tabIdx;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setActiveTab(i)}
+                        style={{
+                          flexShrink: 0, padding: "0.6rem 1.1rem", border: "none", borderBottom: active ? `3px solid ${c}` : "3px solid transparent",
+                          background: active ? `${c}12` : "transparent",
+                          color: active ? c : "#3d6b4a", fontSize: "0.85rem", cursor: "pointer",
+                          fontFamily: "inherit", transition: "all 0.18s", whiteSpace: "nowrap",
+                          marginBottom: "-2px",
+                        }}
+                      >
+                        <span style={{ fontFamily: "monospace", marginRight: "0.35rem", opacity: 0.7 }}>{i + 1}.</span>
+                        {r.name.length > 22 ? r.name.slice(0, 21) + "…" : r.name}
+                      </button>
+                    );
+                  })}
+                </div>
 
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.9rem" }}>
-                  <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#fde68a", fontWeight: "normal" }}>
-                    <span style={{ color: ROUTE_COLORS[i % ROUTE_COLORS.length], marginRight: "0.5rem", fontFamily: "monospace" }}>{i + 1}.</span>{route.name}
-                  </h3>
-                  {profile.hasChildren && route.childFriendlyScore != null && (
-                    <div style={{ padding: "0.25rem 0.85rem", borderRadius: "20px", background: `${scoreColor(route.childFriendlyScore)}18`, border: `1px solid ${scoreColor(route.childFriendlyScore)}55`, fontSize: "0.82rem", color: scoreColor(route.childFriendlyScore), fontFamily: "monospace" }}>
-                      👶 {route.childFriendlyScore}/10
+                {/* Obsah tabu */}
+                <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid #1e4d2b", borderTop: `3px solid ${color}`, borderRadius: "0 0 18px 18px", padding: "1.4rem 1.6rem" }}>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.9rem" }}>
+                    <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#fde68a", fontWeight: "normal" }}>
+                      <span style={{ color, marginRight: "0.5rem", fontFamily: "monospace" }}>{tabIdx + 1}.</span>{route.name}
+                    </h3>
+                    {profile.hasChildren && route.childFriendlyScore != null && (
+                      <div style={{ padding: "0.25rem 0.85rem", borderRadius: "20px", background: `${scoreColor(route.childFriendlyScore)}18`, border: `1px solid ${scoreColor(route.childFriendlyScore)}55`, fontSize: "0.82rem", color: scoreColor(route.childFriendlyScore), fontFamily: "monospace" }}>
+                        👶 {route.childFriendlyScore}/10
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", marginBottom: "0.9rem" }}>
+                    {[{ icon: "📏", val: route.distance }, { icon: "🛣️", val: route.surface }, { icon: "⛰️", val: route.elevation }].map(t => (
+                      <span key={t.val} style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid #1e4d2b", fontSize: "0.82rem", color: "#9ec9aa" }}>{t.icon} {t.val}</span>
+                    ))}
+                    <span style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: `${diffColor(route.difficulty)}12`, border: `1px solid ${diffColor(route.difficulty)}44`, fontSize: "0.82rem", color: diffColor(route.difficulty) }}>💪 {route.difficulty}</span>
+                    {profile.hasEbike && <span style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.35)", fontSize: "0.82rem", color: "#c4b5fd" }}>⚡ E-bike</span>}
+                  </div>
+
+                  {profile.hasTrailer && route.trailerFriendly && (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.9rem", borderRadius: "10px", marginBottom: "0.8rem", background: route.trailerFriendly.startsWith("Áno") ? "rgba(74,222,128,0.1)" : route.trailerFriendly.startsWith("Čias") ? "rgba(251,191,36,0.1)" : "rgba(248,113,113,0.1)", border: `1px solid ${route.trailerFriendly.startsWith("Áno") ? "rgba(74,222,128,0.35)" : route.trailerFriendly.startsWith("Čias") ? "rgba(251,191,36,0.35)" : "rgba(248,113,113,0.35)"}`, fontSize: "0.82rem", color: route.trailerFriendly.startsWith("Áno") ? "#4ade80" : route.trailerFriendly.startsWith("Čias") ? "#fbbf24" : "#f87171" }}>
+                      🛻 Prívesný vozík: {route.trailerFriendly}
                     </div>
                   )}
-                </div>
 
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", marginBottom: "0.9rem" }}>
-                  {[{ icon: "📏", val: route.distance }, { icon: "🛣️", val: route.surface }, { icon: "⛰️", val: route.elevation }].map(t => (
-                    <span key={t.val} style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid #1e4d2b", fontSize: "0.82rem", color: "#9ec9aa" }}>{t.icon} {t.val}</span>
-                  ))}
-                  <span style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: `${diffColor(route.difficulty)}12`, border: `1px solid ${diffColor(route.difficulty)}44`, fontSize: "0.82rem", color: diffColor(route.difficulty) }}>💪 {route.difficulty}</span>
-                  {profile.hasEbike && <span style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.35)", fontSize: "0.82rem", color: "#c4b5fd" }}>⚡ E-bike</span>}
-                </div>
+                  <p style={{ margin: "0 0 0.5rem", color: "#b8d9bf", fontSize: "0.88rem", lineHeight: 1.6 }}>✨ {route.highlights}</p>
+                  <p style={{ margin: "0 0 0.5rem", color: "#86efac", fontSize: "0.88rem", fontStyle: "italic", lineHeight: 1.5 }}>💡 {route.recommendation}</p>
+                  {route.warnings && route.warnings !== "null" && <p style={{ margin: "0 0 0.5rem", color: "#fbbf24", fontSize: "0.83rem" }}>⚠️ {route.warnings}</p>}
 
-                {profile.hasTrailer && route.trailerFriendly && (
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.9rem", borderRadius: "10px", marginBottom: "0.8rem", background: route.trailerFriendly.startsWith("Áno") ? "rgba(74,222,128,0.1)" : route.trailerFriendly.startsWith("Čias") ? "rgba(251,191,36,0.1)" : "rgba(248,113,113,0.1)", border: `1px solid ${route.trailerFriendly.startsWith("Áno") ? "rgba(74,222,128,0.35)" : route.trailerFriendly.startsWith("Čias") ? "rgba(251,191,36,0.35)" : "rgba(248,113,113,0.35)"}`, fontSize: "0.82rem", color: route.trailerFriendly.startsWith("Áno") ? "#4ade80" : route.trailerFriendly.startsWith("Čias") ? "#fbbf24" : "#f87171" }}>
-                    🛻 Prívesný vozík: {route.trailerFriendly}
-                  </div>
-                )}
+                  <WeatherForecast lat={route.startLat} lng={route.startLng} />
 
-                <p style={{ margin: "0 0 0.5rem", color: "#b8d9bf", fontSize: "0.88rem", lineHeight: 1.6 }}>✨ {route.highlights}</p>
-                <p style={{ margin: "0 0 0.5rem", color: "#86efac", fontSize: "0.88rem", fontStyle: "italic", lineHeight: 1.5 }}>💡 {route.recommendation}</p>
-                {route.warnings && route.warnings !== "null" && <p style={{ margin: "0 0 0.5rem", color: "#fbbf24", fontSize: "0.83rem" }}>⚠️ {route.warnings}</p>}
-
-                <WeatherForecast lat={route.startLat} lng={route.startLng} />
-
-                {route.pointsOfInterest?.length > 0 && (
-                  <div style={{ marginTop: "1rem", borderTop: "1px solid #1a3d26", paddingTop: "1rem" }}>
-                    <p style={{ margin: "0 0 0.55rem", fontSize: "0.78rem", color: "#5a9a6a", letterSpacing: "0.06em", textTransform: "uppercase" }}>🏛️ Zaujímavosti do 10 km</p>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                      {route.pointsOfInterest.map((poi, j) => (
-                        <div key={j} style={{ display: "flex", gap: "0.7rem", padding: "0.5rem 0.75rem", borderRadius: "10px", background: "rgba(255,255,255,0.025)", border: "1px solid #172e1f" }}>
-                          <span style={{ fontSize: "1rem", flexShrink: 0 }}>{POI_ICONS[poi.type] || "📍"}</span>
-                          <div>
-                            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                              <span style={{ fontSize: "0.84rem", color: "#fde68a" }}>{poi.name}</span>
-                              <span style={{ fontSize: "0.74rem", color: "#3d6b4a" }}>{poi.distance}</span>
+                  {route.pointsOfInterest?.length > 0 && (
+                    <div style={{ marginTop: "1rem", borderTop: "1px solid #1a3d26", paddingTop: "1rem" }}>
+                      <p style={{ margin: "0 0 0.55rem", fontSize: "0.78rem", color: "#5a9a6a", letterSpacing: "0.06em", textTransform: "uppercase" }}>🏛️ Zaujímavosti do 10 km</p>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                        {route.pointsOfInterest.map((poi, j) => (
+                          <div key={j} style={{ display: "flex", gap: "0.7rem", padding: "0.5rem 0.75rem", borderRadius: "10px", background: "rgba(255,255,255,0.025)", border: "1px solid #172e1f" }}>
+                            <span style={{ fontSize: "1rem", flexShrink: 0 }}>{POI_ICONS[poi.type] || "📍"}</span>
+                            <div>
+                              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                                <span style={{ fontSize: "0.84rem", color: "#fde68a" }}>{poi.name}</span>
+                                <span style={{ fontSize: "0.74rem", color: "#3d6b4a" }}>{poi.distance}</span>
+                              </div>
+                              <p style={{ margin: 0, fontSize: "0.79rem", color: "#7ab88a", lineHeight: 1.5 }}>{poi.description}</p>
                             </div>
-                            <p style={{ margin: 0, fontSize: "0.79rem", color: "#7ab88a", lineHeight: 1.5 }}>{poi.description}</p>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.8rem", borderTop: "1px solid #1a3d26", paddingTop: "0.7rem", alignItems: "center" }}>
-                  {route.startLat && route.startLng && (
-                    <a
-                      href={`https://mapy.cz/cyklo?x=${route.startLng}&y=${route.startLat}&z=15&source=coor&id=${route.startLng},${route.startLat}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(234,88,12,0.12)", border: "1px solid rgba(234,88,12,0.4)", fontSize: "0.8rem", color: "#fb923c", textDecoration: "none" }}
-                    >
-                      🗺️ Otvoriť v Mapy.cz
-                    </a>
-                  )}
-                  {route.sources?.length > 0 && (
-                    <>
-                      <span style={{ fontSize: "0.74rem", color: "#3d6b4a" }}>Zdroje:</span>
-                      {route.sources.map(src => (
-                        <span key={src} style={{ padding: "0.15rem 0.6rem", borderRadius: "6px", background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.3)", fontSize: "0.74rem", color: "#a5b4fc" }}>🔗 {src}</span>
-                      ))}
-                    </>
-                  )}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.8rem", borderTop: "1px solid #1a3d26", paddingTop: "0.7rem", alignItems: "center" }}>
+                    {route.startLat && route.startLng && (
+                      <a href={`https://mapy.cz/cyklo?x=${route.startLng}&y=${route.startLat}&z=15&source=coor&id=${route.startLng},${route.startLat}`}
+                        target="_blank" rel="noopener noreferrer"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(234,88,12,0.12)", border: "1px solid rgba(234,88,12,0.4)", fontSize: "0.8rem", color: "#fb923c", textDecoration: "none" }}>
+                        🗺️ Otvoriť v Mapy.cz
+                      </a>
+                    )}
+                    {route.sources?.length > 0 && (
+                      <>
+                        <span style={{ fontSize: "0.74rem", color: "#3d6b4a" }}>Zdroje:</span>
+                        {route.sources.map(src => (
+                          <span key={src} style={{ padding: "0.15rem 0.6rem", borderRadius: "6px", background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.3)", fontSize: "0.74rem", color: "#a5b4fc" }}>🔗 {src}</span>
+                        ))}
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           {result.generalTips && (
             <div style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: "16px", padding: "1.2rem 1.5rem", marginBottom: "2rem" }}>
