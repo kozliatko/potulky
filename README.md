@@ -13,20 +13,29 @@ AI agent pre hľadanie rodinných cyklociest. Podľa zadanej lokality vyhľadá 
 
 ## Architektúra
 
+### Prehľad
+
 ```
-Docker (produkcia)
-│
-└── app (node:20-alpine)   port 8080
-    ├── Express.js backend  (port 3001 interný)
-    │   ├── Rate limiting (20 req/min)
-    │   ├── Voliteľná autorizácia (x-api-token)
-    │   ├── main:     Anthropic proxy → claude-sonnet-4-20250514
-    │   └── deepseek: Agentic loop → DeepSeek V3 + Tavily Search
-    └── React frontend (Vite build, servovaný ako statické súbory)
-        ├── Leaflet mapa s trasami + marker centra lokality
-        ├── Predpoveď počasia (open-meteo.com)
-        ├── jsonrepair — oprava malformovaného JSON z AI
-        └── Responzívny dizajn (svetlá téma, media queries)
+┌─────────────────────────────────────────────────────────┐
+│  Docker kontajner  (node:20-alpine, port 8080)          │
+│                                                         │
+│  ┌─────────────────────┐   statické   ┌──────────────┐ │
+│  │   Express.js        │◄────súbory───│  React/Vite  │ │
+│  │   backend :3001     │              │  frontend    │ │
+│  │                     │◄── POST /api/messages ──────┤ │
+│  │  • rate limit       │              │              │ │
+│  │  • auth token       │──odpoveď────►│              │ │
+│  └────────┬────────────┘              └──────────────┘ │
+└───────────┼─────────────────────────────────────────────┘
+            │
+     ┌──────┴──────────────────────────────────┐
+     │  main vetva          deepseek vetva      │
+     │                                          │
+     │  Anthropic API       DeepSeek V3 API     │
+     │  claude-sonnet       (OpenAI-compatible) │
+     │  natívny             ↕ agentic loop      │
+     │  web_search          Tavily Search API   │
+     └──────────────────────────────────────────┘
 ```
 
 **Development:**
@@ -35,6 +44,112 @@ docker-compose.dev.yml
 ├── frontend  (Vite dev server, hot reload)   port 5173
 └── backend   (node --watch)                  port 3001
 ```
+
+---
+
+### Tok požiadavky
+
+```
+Používateľ zadá lokalitu
+        │
+        ▼
+[BikeAgent.jsx] buildSystemPrompt(profile)
+   → generuje system prompt podľa konfigurácie (e-bike / deti / vozík)
+        │
+        ▼
+POST /api/messages  { system, messages, max_tokens }
+        │
+   ┌────┴──────────────────────────────────────────┐
+   │ main vetva                deepseek vetva       │
+   │                                                │
+   │ Anthropic API             DeepSeek V3 API      │
+   │ (jednoduchý proxy)        agentic loop:        │
+   │                           1. DeepSeek → tool?  │
+   │                           2. áno → Tavily      │
+   │                           3. výsledok späť     │
+   │                           4. opakuj (max 25x)  │
+   └────────────────┬──────────────────────────────-┘
+                    │
+        { content: [{ type: "text", text }], usage }
+                    │
+                    ▼
+[BikeAgent.jsx] extractFirstJSON(text)
+   → nájde prvý kompletný JSON objekt (počítanie {})
+   → jsonrepair() opraví malformácie
+   → JSON.parse() → parsed result
+                    │
+                    ▼
+        Render: taby, mapa, počasie
+```
+
+---
+
+### Frontend — komponenty a stav
+
+**Hlavný komponent `BikeAgent`** (`frontend/src/components/BikeAgent.jsx`)
+
+| State         | Typ       | Popis                                      |
+|---------------|-----------|--------------------------------------------|
+| `location`    | string    | Zadaná lokalita                            |
+| `phase`       | string    | `idle / searching / verifying / analyzing / done / error` |
+| `result`      | object    | Parsovaný JSON z AI                        |
+| `profile`     | object    | `{ hasEbike, hasChildren, hasTrailer }`    |
+| `usage`       | object    | `{ inputTokens, outputTokens, searchCount }` |
+| `filters`     | object    | `{ difficulty[], minScore, trailerOnly }`  |
+| `activeTab`   | number    | Index aktívnej trasy                       |
+| `history`     | array     | Posledných 10 vyhľadávaní (localStorage)   |
+
+**Kľúčové funkcie:**
+
+| Funkcia              | Popis                                                  |
+|----------------------|--------------------------------------------------------|
+| `buildSystemPrompt`  | Generuje system prompt dynamicky podľa profilu         |
+| `extractFirstJSON`   | Extrahuje JSON zo surového textu (počítanie zanorenia) |
+| `calcCost`           | Orientačná cena v USD z počtu tokenov a vyhľadávaní   |
+| `runAgent`           | Zavolá backend, spracuje odpoveď, uloží do histórie    |
+| `filteredRoutes`     | Computed pole trás po aplikovaní filtrov               |
+
+**Subkomponenty:**
+
+| Komponent        | Popis                                                         |
+|------------------|---------------------------------------------------------------|
+| `RouteMap`       | Leaflet mapa — číslované piny trás + zlatý marker lokality    |
+| `WeatherForecast`| 3-dňová predpoveď z open-meteo.com pre každú trasu           |
+
+---
+
+### Backend — middleware a routes
+
+**`backend/server.js`**
+
+```
+POST /api/messages
+  └── authMiddleware        (x-api-token hlavička, ak API_SECRET_TOKEN nastavený)
+  └── rateLimiter           (20 req/min na IP)
+  └── runAgent()
+        ├── main:     Anthropic SDK → claude-sonnet-4-20250514
+        └── deepseek: agentic loop → DeepSeek V3 + Tavily Search (max 25 iterácií)
+  └── { content: [{ type: "text", text }], usage }
+
+GET /health               → { status: "ok", timestamp }
+GET *                     → index.html  (SPA fallback)
+```
+
+Response formát je identický pre obe vetvy — frontend nepotrebuje vedieť, ktorý backend beží.
+
+---
+
+### Externé závislosti
+
+| Služba                  | Využitie                                 | Vetva       |
+|-------------------------|------------------------------------------|-------------|
+| Anthropic API           | LLM + natívny web_search nástroj         | main        |
+| DeepSeek API            | LLM (OpenAI-compatible endpoint)         | deepseek    |
+| Tavily Search API       | Webové vyhľadávanie pre agentic loop     | deepseek    |
+| OpenStreetMap tiles CDN | Mapové dlaždice v Leaflet                | obe         |
+| Open-Meteo API          | Predpoveď počasia (bezplatné, bez kľúča) | obe         |
+| Mapy.cz                 | Externý navigačný odkaz na cyklotrasu    | obe         |
+| Leaflet CDN             | Knižnica interaktívnej mapy              | obe         |
 
 ---
 
@@ -168,7 +283,7 @@ Response formát je identický s Anthropic API (`{ content: [{ type: "text", tex
 
 ### System prompt
 
-Definovaný v `frontend/src/components/BikeAgent.jsx` — konštanta `SYSTEM_PROMPT` (riadok ~10).
+Generovaný dynamicky funkciou `buildSystemPrompt(profile)` v `frontend/src/components/BikeAgent.jsx`. Obsah sa mení podľa konfigurácie profilu (e-bike, deti, prívesný vozík) — iné požiadavky na dĺžku, povrch a bezpečnosť trasy.
 
 Agent dostane pokyn vrátiť výsledky ako čistý JSON s touto schémou:
 
