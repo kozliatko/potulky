@@ -23,9 +23,10 @@ Docker (produkcia)
     │   ├── main:     Anthropic proxy → claude-sonnet-4-20250514
     │   └── deepseek: Agentic loop → DeepSeek V3 + Tavily Search
     └── React frontend (Vite build, servovaný ako statické súbory)
-        ├── Leaflet mapa s trasami
+        ├── Leaflet mapa s trasami + marker centra lokality
         ├── Predpoveď počasia (open-meteo.com)
-        └── jsonrepair — oprava malformovaného JSON z AI
+        ├── jsonrepair — oprava malformovaného JSON z AI
+        └── Responzívny dizajn (svetlá téma, media queries)
 ```
 
 **Development:**
@@ -205,7 +206,7 @@ Agent dostane pokyn vrátiť výsledky ako čistý JSON s touto schémou:
 }
 ```
 
-Frontend parsuje JSON cez `jsonrepair` — opravuje bežné chyby AI (chýbajúce úvodzovky pri hodnotách s diakritikou, trailing čiarky a pod.).
+Frontend extrahuje JSON pomocou `extractFirstJSON()` (počítanie zanorenia `{}`), ktorá správne ignoruje akýkoľvek text za JSON blokom — odolné voči komentárom a vysvetlivkám, ktoré AI pridá za odpoveď. Následne opravuje bežné chyby cez `jsonrepair` (chýbajúce úvodzovky pri hodnotách s diakritikou, trailing čiarky a pod.). Pri zlyhaní sa raw odpoveď AI loguje do konzoly prehliadača.
 
 ---
 
@@ -217,8 +218,8 @@ Frontend parsuje JSON cez `jsonrepair` — opravuje bežné chyby AI (chýbajúc
 **`Agent prekročil maximálny počet krokov`**
 → DeepSeek volá príliš veľa vyhľadávaní. Skontroluj SYSTEM_PROMPT — limit je nastavený na max 10 `web_search` volaní.
 
-**`Unexpected token ... is not valid JSON`**
-→ jsonrepair je aktívny a mal by to opraviť automaticky. Ak nie, skontroluj konzolu prehliadača pre pôvodnú AI odpoveď.
+**`Chyba spracovania JSON` alebo `Agent nevrátil správny formát odpovede`**
+→ AI vrátila odpoveď v neočakávanom formáte. Otvor DevTools → Console — raw odpoveď AI je zalogovaná ako `[BikeAgent] Raw AI response`. Skopíruj ju pre diagnostiku.
 
 **Backend nenaštartuje:**
 ```bash
@@ -229,8 +230,29 @@ docker compose logs app
 **Mapa sa nezobrazuje:**
 → Leaflet sa načítava z CDN — skontroluj internetové pripojenie.
 
+**Pin trasy chýba na mape:**
+→ AI nevrátila GPS súradnice pre danú trasu. Trasa sa zobrazí orientačným pinom (~číslo, prerušovaný okraj) na centre oblasti.
+
 **Agent trvá dlho (30–60s):**
 → Normálne správanie pri viacerých web search volaniach. Nginx timeout je 90s.
+
+---
+
+## Changelog
+
+### v1.1.0
+- Responzívny dizajn — svetlá farebná téma, taby sa zalamujú namiesto horizontálneho scrollu
+- Mapa — zlatý 📍 marker pre centrum vyhľadávanej lokality
+- Mapa — fallback orientačný pin (~číslo) pre trasy bez GPS súradníc
+- JSON parsing — `extractFirstJSON()` namiesto greedy regex, odolné voči textu za JSON blokom
+- Debugovanie — raw AI odpoveď sa loguje do konzoly pri zlyhaní parsingu
+
+### v1.0.0
+- Základná verzia: vyhľadávanie trás, Leaflet mapa, predpoveď počasia
+- Konfigurovateľný profil skupiny (e-bike, deti, prívesný vozík)
+- História vyhľadávaní (localStorage), filtrovanie trás, meranie nákladov
+- Zobrazenie trás ako taby
+- Navigačný odkaz na Mapy.cz
 
 ---
 
