@@ -527,7 +527,7 @@ export default function BikeAgent() {
             return (
               <div style={{ marginBottom: "2rem" }}>
                 {/* Tab hlavičky */}
-                <div style={{ display: "flex", gap: "0", overflowX: "auto", marginBottom: "0", borderBottom: "2px solid #1a3d26", paddingBottom: "0" }}>
+                <div style={{ display: "flex", gap: "0.4rem", overflowX: "auto", padding: "0.5rem 0.5rem 0", background: "rgba(0,0,0,0.25)", borderRadius: "14px 14px 0 0", border: "1px solid #1a3d26", borderBottom: "none" }}>
                   {filteredRoutes.map((r, i) => {
                     const c      = ROUTE_COLORS[i % ROUTE_COLORS.length];
                     const active = i === tabIdx;
@@ -536,22 +536,35 @@ export default function BikeAgent() {
                         key={i}
                         onClick={() => setActiveTab(i)}
                         style={{
-                          flexShrink: 0, padding: "0.6rem 1.1rem", border: "none", borderBottom: active ? `3px solid ${c}` : "3px solid transparent",
-                          background: active ? `${c}12` : "transparent",
-                          color: active ? c : "#3d6b4a", fontSize: "0.85rem", cursor: "pointer",
+                          flexShrink: 0, padding: "0.55rem 1.1rem 0.7rem",
+                          border: `1.5px solid ${active ? c : "#1e4d2b"}`,
+                          borderBottom: active ? `1.5px solid ${color}20` : "1.5px solid #1e4d2b",
+                          borderRadius: "10px 10px 0 0",
+                          background: active ? `linear-gradient(180deg, ${c}28 0%, ${c}10 100%)` : "rgba(255,255,255,0.03)",
+                          color: active ? c : "#4a7a5a",
+                          fontSize: "0.84rem", cursor: "pointer",
                           fontFamily: "inherit", transition: "all 0.18s", whiteSpace: "nowrap",
-                          marginBottom: "-2px",
+                          fontWeight: active ? "600" : "normal",
+                          boxShadow: active ? `0 -2px 8px ${c}22` : "none",
+                          marginBottom: active ? "-1.5px" : "0",
                         }}
                       >
-                        <span style={{ fontFamily: "monospace", marginRight: "0.35rem", opacity: 0.7 }}>{i + 1}.</span>
-                        {r.name.length > 22 ? r.name.slice(0, 21) + "…" : r.name}
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          width: "1.3rem", height: "1.3rem", borderRadius: "50%",
+                          background: active ? c : "#1e4d2b",
+                          color: active ? "#000" : "#3d6b4a",
+                          fontSize: "0.72rem", fontFamily: "monospace", fontWeight: "bold",
+                          marginRight: "0.45rem", flexShrink: 0,
+                        }}>{i + 1}</span>
+                        {r.name.length > 20 ? r.name.slice(0, 19) + "…" : r.name}
                       </button>
                     );
                   })}
                 </div>
 
                 {/* Obsah tabu */}
-                <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid #1e4d2b", borderTop: `3px solid ${color}`, borderRadius: "0 0 18px 18px", padding: "1.4rem 1.6rem" }}>
+                <div style={{ background: "rgba(255,255,255,0.03)", border: `1.5px solid ${color}`, borderTop: `3px solid ${color}`, borderRadius: "0 0 18px 18px", padding: "1.4rem 1.6rem" }}>
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.9rem" }}>
                     <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#fde68a", fontWeight: "normal" }}>
