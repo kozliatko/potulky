@@ -63,6 +63,10 @@ async function runAgent({ system, messages, max_tokens }) {
     ...messages,
   ];
 
+  let inputTokens  = 0;
+  let outputTokens = 0;
+  let searchCount  = 0;
+
   for (let i = 0; i < 25; i++) {
     const response = await deepseek.chat.completions.create({
       model: "deepseek-chat",
@@ -72,15 +76,21 @@ async function runAgent({ system, messages, max_tokens }) {
       messages: history,
     });
 
+    if (response.usage) {
+      inputTokens  += response.usage.prompt_tokens     || 0;
+      outputTokens += response.usage.completion_tokens || 0;
+    }
+
     const msg = response.choices[0].message;
     history.push(msg);
 
     if (!msg.tool_calls || msg.tool_calls.length === 0) {
-      return msg.content;
+      return { text: msg.content, usage: { inputTokens, outputTokens, searchCount } };
     }
 
     for (const call of msg.tool_calls) {
       const { query } = JSON.parse(call.function.arguments);
+      searchCount++;
       let result;
       try {
         result = await tavilySearch(query);
@@ -140,10 +150,9 @@ app.post("/api/messages", authMiddleware, async (req, res) => {
       return res.status(400).json({ error: "Chýba pole messages." });
     }
 
-    const text = await runAgent({ system, messages, max_tokens });
+    const { text, usage } = await runAgent({ system, messages, max_tokens });
 
-    // Vrátime rovnaký formát ako Anthropic API, aby frontend netreba meniť
-    res.json({ content: [{ type: "text", text }] });
+    res.json({ content: [{ type: "text", text }], usage });
   } catch (err) {
     console.error("[DeepSeek Error]", err.message);
     res.status(500).json({ error: err.message || "Interná chyba servera." });

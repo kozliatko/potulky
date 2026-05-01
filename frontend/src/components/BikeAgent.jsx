@@ -9,6 +9,21 @@ const API_URL = "/api/messages";
 
 const DEFAULT_PROFILE = { hasEbike: true, hasChildren: true, hasTrailer: true };
 
+const HISTORY_KEY = "bikeagent-history";
+// DeepSeek V3 ceny (USD/token)
+const PRICE_INPUT  = 0.27  / 1_000_000;
+const PRICE_OUTPUT = 1.10  / 1_000_000;
+const PRICE_SEARCH = 0.01; // Tavily / vyhľadávanie
+
+function calcCost(usage) {
+  if (!usage) return null;
+  return usage.inputTokens * PRICE_INPUT + usage.outputTokens * PRICE_OUTPUT + usage.searchCount * PRICE_SEARCH;
+}
+
+function profileIcons({ hasEbike, hasChildren, hasTrailer }) {
+  return [hasEbike && "⚡", hasChildren && "👧", hasTrailer && "🛻"].filter(Boolean).join("");
+}
+
 function buildSystemPrompt({ hasEbike, hasChildren, hasTrailer }) {
   const lines = [];
 
@@ -219,11 +234,30 @@ export default function BikeAgent() {
   const [result,   setResult]   = useState(null);
   const [error,    setError]    = useState(null);
   const [profile,  setProfile]  = useState(DEFAULT_PROFILE);
+  const [usage,    setUsage]    = useState(null);
+  const [filters,  setFilters]  = useState({ difficulty: [], minScore: 0, trailerOnly: false });
+  const [history,  setHistory]  = useState(() => {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
+  });
 
   const toggleProfile = key => setProfile(p => {
     const next = { ...p, [key]: !p[key] };
     if (!next.hasChildren) next.hasTrailer = false;
     return next;
+  });
+
+  const resetFilters = () => setFilters({ difficulty: [], minScore: 0, trailerOnly: false });
+
+  const toggleDifficulty = d => setFilters(f => ({
+    ...f,
+    difficulty: f.difficulty.includes(d) ? f.difficulty.filter(x => x !== d) : [...f.difficulty, d],
+  }));
+
+  const filteredRoutes = (result?.routes || []).filter(r => {
+    if (filters.difficulty.length > 0 && !filters.difficulty.includes(r.difficulty)) return false;
+    if (profile.hasChildren && filters.minScore > 0 && (r.childFriendlyScore || 0) < filters.minScore) return false;
+    if (profile.hasTrailer && filters.trailerOnly && !r.trailerFriendly?.startsWith("Áno")) return false;
+    return true;
   });
 
   const phases     = ["Hľadám trasy", "Overujem zdroje", "Hodnotím vhodnosť"];
@@ -232,7 +266,7 @@ export default function BikeAgent() {
 
   const runAgent = async () => {
     if (!location.trim() || isLoading) return;
-    setPhase("searching"); setResult(null); setError(null);
+    setPhase("searching"); setResult(null); setError(null); setUsage(null);
 
     try {
       const t1 = setTimeout(() => setPhase("verifying"),  5000);
@@ -273,12 +307,28 @@ export default function BikeAgent() {
         throw new Error(err.error || `HTTP ${response.status}`);
       }
 
-      const data = await response.json();
-      const text = data.content.filter(b => b.type === "text").map(b => b.text).join("");
-      const m    = text.match(/\{[\s\S]*\}/);
+      const data    = await response.json();
+      const text    = data.content.filter(b => b.type === "text").map(b => b.text).join("");
+      const m       = text.match(/\{[\s\S]*\}/);
       if (!m) throw new Error("Agent nevrátil správny formát odpovede.");
 
-      setResult(JSON.parse(jsonrepair(m[0])));
+      const parsed  = JSON.parse(jsonrepair(m[0]));
+      const usageData = data.usage || null;
+      const cost    = calcCost(usageData);
+
+      setResult(parsed);
+      setUsage(usageData);
+      resetFilters();
+
+      // Uloženie do histórie
+      const entry = { id: Date.now(), location, profile: { ...profile }, result: parsed, usage: usageData, cost };
+      setHistory(prev => {
+        const deduped = prev.filter(h => !(h.location === location && JSON.stringify(h.profile) === JSON.stringify(profile)));
+        const next    = [entry, ...deduped].slice(0, 10);
+        try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
+        return next;
+      });
+
       setPhase("done");
     } catch (err) {
       console.error(err);
@@ -346,6 +396,31 @@ export default function BikeAgent() {
         })}
       </div>
 
+      {/* História vyhľadávaní */}
+      {history.length > 0 && (
+        <div style={{ maxWidth: "620px", margin: "0 auto 1.2rem", animation: "fadeUp 0.5s ease" }}>
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ fontSize: "0.72rem", color: "#3d6b4a", whiteSpace: "nowrap" }}>Nedávne:</span>
+            {history.map(h => (
+              <button
+                key={h.id}
+                onClick={() => { setLocation(h.location); setProfile(h.profile); setResult(h.result); setUsage(h.usage); resetFilters(); setPhase("done"); }}
+                title={`${h.location} · ${new Date(h.id).toLocaleDateString("sk")}`}
+                style={{ padding: "0.2rem 0.65rem", borderRadius: "20px", border: "1px solid #1e4d2b", background: "rgba(255,255,255,0.04)", color: "#7ab88a", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: "0.3rem", alignItems: "center" }}
+              >
+                <span>{h.location}</span>
+                <span style={{ opacity: 0.6, fontSize: "0.7rem" }}>{profileIcons(h.profile)}</span>
+              </button>
+            ))}
+            <button
+              onClick={() => { setHistory([]); try { localStorage.removeItem(HISTORY_KEY); } catch {} }}
+              style={{ padding: "0.2rem 0.55rem", borderRadius: "20px", border: "1px solid #2a1a1a", background: "transparent", color: "#3d3030", fontSize: "0.72rem", cursor: "pointer", fontFamily: "inherit" }}
+              title="Vymazať históriu"
+            >🗑️</button>
+          </div>
+        </div>
+      )}
+
       {/* Hľadanie */}
       <div style={{ maxWidth: "620px", margin: "0 auto 2.5rem", display: "flex", gap: "0.75rem", animation: "fadeUp 0.6s ease 0.1s both" }}>
         <input
@@ -390,17 +465,61 @@ export default function BikeAgent() {
         <div style={{ maxWidth: "900px", margin: "0 auto", animation: "fadeUp 0.5s ease" }}>
 
           <div style={{ background: "rgba(34,197,94,0.07)", border: "1px solid #1e4d2b", borderLeft: "4px solid #22c55e", borderRadius: "14px", padding: "1rem 1.4rem", marginBottom: "1.5rem" }}>
-            <p style={{ margin: 0, color: "#a7d9b2", lineHeight: 1.65, fontSize: "0.94rem" }}>
-              📍 <strong style={{ color: "#86efac" }}>{location}</strong> — {result.summary}
-            </p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
+              <p style={{ margin: 0, color: "#a7d9b2", lineHeight: 1.65, fontSize: "0.94rem" }}>
+                📍 <strong style={{ color: "#86efac" }}>{location}</strong> — {result.summary}
+              </p>
+              {usage && (
+                <div style={{ flexShrink: 0, padding: "0.2rem 0.75rem", borderRadius: "20px", background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", fontSize: "0.75rem", color: "#a37f30", whiteSpace: "nowrap" }}
+                  title={`Vstup: ${usage.inputTokens?.toLocaleString()} tokenov · Výstup: ${usage.outputTokens?.toLocaleString()} tokenov · Vyhľadávania: ${usage.searchCount}`}
+                >
+                  💰 ~${calcCost(usage)?.toFixed(3)} · {usage.searchCount} 🔍
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Filter */}
+          {(result.routes?.length > 0) && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", alignItems: "center", marginBottom: "1.2rem", padding: "0.7rem 1rem", background: "rgba(255,255,255,0.025)", border: "1px solid #1a3d26", borderRadius: "12px" }}>
+              <span style={{ fontSize: "0.74rem", color: "#3d6b4a" }}>Filtre:</span>
+              {["Ľahká", "Stredná", "Ťažká"].map(d => (
+                <button key={d} onClick={() => toggleDifficulty(d)} style={{ padding: "0.2rem 0.65rem", borderRadius: "20px", border: "1px solid", borderColor: filters.difficulty.includes(d) ? diffColor(d) : "#1e4d2b", background: filters.difficulty.includes(d) ? `${diffColor(d)}18` : "transparent", color: filters.difficulty.includes(d) ? diffColor(d) : "#5a9a6a", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit" }}>
+                  {d}
+                </button>
+              ))}
+              {profile.hasChildren && (
+                <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem", color: "#5a9a6a", cursor: "pointer" }}>
+                  <input type="range" min={0} max={10} value={filters.minScore} onChange={e => setFilters(f => ({ ...f, minScore: +e.target.value }))}
+                    style={{ width: "70px", accentColor: "#22c55e" }} />
+                  👶 min {filters.minScore}/10
+                </label>
+              )}
+              {profile.hasTrailer && (
+                <button onClick={() => setFilters(f => ({ ...f, trailerOnly: !f.trailerOnly }))} style={{ padding: "0.2rem 0.65rem", borderRadius: "20px", border: "1px solid", borderColor: filters.trailerOnly ? "#4ade80" : "#1e4d2b", background: filters.trailerOnly ? "rgba(74,222,128,0.12)" : "transparent", color: filters.trailerOnly ? "#4ade80" : "#5a9a6a", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit" }}>
+                  🛻 Len vozík OK
+                </button>
+              )}
+              {(filters.difficulty.length > 0 || filters.minScore > 0 || filters.trailerOnly) && (
+                <button onClick={resetFilters} style={{ padding: "0.2rem 0.55rem", borderRadius: "20px", border: "1px solid #2a3a2a", background: "transparent", color: "#3d5a3d", fontSize: "0.74rem", cursor: "pointer", fontFamily: "inherit" }}>✕ Reset</button>
+              )}
+              <span style={{ marginLeft: "auto", fontSize: "0.74rem", color: "#3d6b4a" }}>
+                {filteredRoutes.length}/{result.routes.length} trás
+              </span>
+            </div>
+          )}
 
           {result.centerLat && result.centerLng && (
             <RouteMap routes={result.routes || []} centerLat={result.centerLat} centerLng={result.centerLng} />
           )}
 
           <div style={{ display: "flex", flexDirection: "column", gap: "1.3rem", marginBottom: "2rem" }}>
-            {result.routes?.map((route, i) => (
+            {filteredRoutes.length === 0 && (
+              <div style={{ textAlign: "center", padding: "2rem", color: "#3d6b4a", fontStyle: "italic" }}>
+                Žiadne trasy nevyhovujú aktívnym filtrom.
+              </div>
+            )}
+            {filteredRoutes.map((route, i) => (
               <div key={i} className="route-card" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid #1e4d2b", borderLeft: `4px solid ${ROUTE_COLORS[i % ROUTE_COLORS.length]}`, borderRadius: "18px", padding: "1.4rem 1.6rem", transition: "border-color 0.2s" }}>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.9rem" }}>
