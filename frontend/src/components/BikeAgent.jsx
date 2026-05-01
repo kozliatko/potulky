@@ -98,13 +98,30 @@ DÔLEŽITÉ: Odpoveď vráť VÝLUČNE ako čistý JSON objekt bez akýchkoľvek
   return prompt;
 }
 
+// Extrahuje prvý kompletný JSON objekt zo stringu (ignoruje text za ním)
+function extractFirstJSON(str) {
+  const start = str.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < str.length; i++) {
+    const c = str[i];
+    if (esc)              { esc = false; continue; }
+    if (c === '\\' && inStr) { esc = true; continue; }
+    if (c === '"')        { inStr = !inStr; continue; }
+    if (inStr)            continue;
+    if (c === '{')        depth++;
+    if (c === '}') { depth--; if (depth === 0) return str.slice(start, i + 1); }
+  }
+  return null;
+}
+
 // ─── Pomocné konštanty ───────────────────────────────────────────────────────
-const ROUTE_COLORS = ["#4ade80", "#60a5fa", "#f472b6", "#fb923c", "#a78bfa"];
+const ROUTE_COLORS = ["#059669", "#2563eb", "#db2777", "#ea580c", "#7c3aed"];
 const DAY_NAMES    = ["Dnes", "Zajtra", "Pozajtra"];
 const POI_ICONS    = { hrad: "🏰", ihrisko: "🛝", kúpalisko: "🏊", reštaurácia: "🍽️", príroda: "🌿", múzeum: "🏛️", rozhľadňa: "🔭" };
 
 // ─── Mapa ────────────────────────────────────────────────────────────────────
-function RouteMap({ routes, centerLat, centerLng }) {
+function RouteMap({ routes, centerLat, centerLng, location }) {
   const mapRef     = useRef(null);
   const leafletMap = useRef(null);
 
@@ -139,23 +156,45 @@ function RouteMap({ routes, centerLat, centerLng }) {
 
       map.setView([centerLat, centerLng], 11);
 
+      // Marker pre centrum vyhľadávanej lokality
+      const centerIcon = L.divIcon({
+        className: "",
+        html: `<div style="width:38px;height:38px;border-radius:50%;background:#f59e0b;border:3px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(245,158,11,0.5);font-size:17px">📍</div>`,
+        iconSize:    [38, 38],
+        iconAnchor:  [19, 19],
+        popupAnchor: [0, -22],
+      });
+      L.marker([centerLat, centerLng], { icon: centerIcon, zIndexOffset: 1000 })
+        .addTo(map)
+        .bindPopup(
+          `<div style="font-family:system-ui,sans-serif;color:#064e3b;min-width:140px">
+            <strong>📍 ${location || "Vyhľadávaná lokalita"}</strong><br/>
+            <span style="font-size:0.8em;color:#9ca3af">centrum oblasti</span>
+          </div>`
+        );
+
       routes.forEach((route, i) => {
-        if (!route.startLat || !route.startLng) return;
+        const isApprox = route.startLat == null || route.startLng == null;
+        const lat = isApprox ? centerLat : route.startLat;
+        const lng = isApprox ? centerLng : route.startLng;
         const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
         const icon  = L.divIcon({
           className: "",
-          html: `<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;background:${color};border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#000;font-weight:bold;font-size:14px;transform:rotate(-45deg);box-shadow:0 2px 10px rgba(0,0,0,0.5)"><span style="transform:rotate(45deg)">${i + 1}</span></div>`,
+          html: isApprox
+            ? `<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;background:${color};border:2px dashed #fff;opacity:0.65;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:13px;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(0,0,0,0.18)"><span style="transform:rotate(45deg)">~${i + 1}</span></div>`
+            : `<div style="width:34px;height:34px;border-radius:50% 50% 50% 0;background:${color};border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:14px;transform:rotate(-45deg);box-shadow:0 2px 10px rgba(0,0,0,0.25)"><span style="transform:rotate(45deg)">${i + 1}</span></div>`,
           iconSize:    [34, 34],
           iconAnchor:  [17, 34],
           popupAnchor: [0, -36],
         });
-        L.marker([route.startLat, route.startLng], { icon })
+        L.marker([lat, lng], { icon })
           .addTo(map)
           .bindPopup(
-            `<div style="font-family:Georgia,serif;min-width:190px;color:#ddeee3">
+            `<div style="font-family:system-ui,sans-serif;min-width:190px;color:#064e3b">
               <strong style="color:${color}">${i + 1}. ${route.name}</strong><br/>
               📏 ${route.distance} &nbsp; ⛰️ ${route.elevation}<br/>
               🛣️ ${route.surface} &nbsp; 💪 ${route.difficulty}
+              ${isApprox ? '<br/><em style="color:#9ca3af;font-size:0.8em">📍 poloha orientačná</em>' : ''}
             </div>`
           );
       });
@@ -168,14 +207,14 @@ function RouteMap({ routes, centerLat, centerLng }) {
   }, []);
 
   return (
-    <div style={{ marginBottom: "1.8rem", borderRadius: "18px", overflow: "hidden", border: "1px solid #1e4d2b" }}>
-      <div style={{ padding: "0.6rem 1rem", background: "rgba(34,197,94,0.07)", borderBottom: "1px solid #1e4d2b", fontSize: "0.78rem", color: "#5a9a6a", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+    <div style={{ marginBottom: "1.5rem", borderRadius: "14px", overflow: "hidden", border: "1px solid #d1fae5", boxShadow: "0 1px 8px rgba(5,150,105,0.08)" }}>
+      <div style={{ padding: "0.55rem 1rem", background: "#f0fdf4", borderBottom: "1px solid #d1fae5", fontSize: "0.75rem", color: "#059669", letterSpacing: "0.05em", textTransform: "uppercase", fontWeight: "600" }}>
         🗺️ Mapa trás — klikni na marker pre detail
       </div>
-      <div ref={mapRef} style={{ height: "340px", width: "100%", background: "#0f2d1b" }} />
-      <div style={{ padding: "0.55rem 1rem", display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
+      <div ref={mapRef} style={{ height: "320px", width: "100%" }} />
+      <div style={{ padding: "0.5rem 1rem", background: "#fff", display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
         {routes.map((r, i) => (
-          <span key={i} style={{ fontSize: "0.77rem", padding: "0.2rem 0.65rem", borderRadius: "6px", background: `${ROUTE_COLORS[i % ROUTE_COLORS.length]}18`, border: `1px solid ${ROUTE_COLORS[i % ROUTE_COLORS.length]}55`, color: ROUTE_COLORS[i % ROUTE_COLORS.length] }}>
+          <span key={i} style={{ fontSize: "0.75rem", padding: "0.18rem 0.6rem", borderRadius: "6px", background: `${ROUTE_COLORS[i % ROUTE_COLORS.length]}15`, border: `1px solid ${ROUTE_COLORS[i % ROUTE_COLORS.length]}55`, color: ROUTE_COLORS[i % ROUTE_COLORS.length], fontWeight: "500" }}>
             {i + 1}. {r.name}
           </span>
         ))}
@@ -197,12 +236,12 @@ function WeatherForecast({ lat, lng }) {
       .catch(() => setLoading(false));
   }, [lat, lng]);
 
-  if (loading) return <div style={{ fontSize: "0.78rem", color: "#3d6b4a", fontStyle: "italic", padding: "0.4rem 0" }}>Načítavam počasie...</div>;
+  if (loading) return <div style={{ fontSize: "0.78rem", color: "#6b7280", fontStyle: "italic", padding: "0.4rem 0" }}>Načítavam počasie...</div>;
   if (!weather) return null;
 
   return (
-    <div style={{ marginTop: "0.85rem", borderTop: "1px solid #1a3d26", paddingTop: "0.85rem" }}>
-      <p style={{ margin: "0 0 0.5rem", fontSize: "0.78rem", color: "#5a9a6a", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+    <div style={{ marginTop: "0.85rem", borderTop: "1px solid #e5e7eb", paddingTop: "0.85rem" }}>
+      <p style={{ margin: "0 0 0.5rem", fontSize: "0.78rem", color: "#047857", letterSpacing: "0.06em", textTransform: "uppercase", fontWeight: "600" }}>
         🌤️ Predpoveď počasia — 3 dni
       </p>
       <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -210,15 +249,15 @@ function WeatherForecast({ lat, lng }) {
           const info = weatherInfo(weather.weathercode[i]);
           const rain = weather.precipitation_sum[i];
           return (
-            <div key={i} style={{ flex: 1, padding: "0.55rem 0.4rem", borderRadius: "10px", background: "rgba(255,255,255,0.03)", border: "1px solid #172e1f", textAlign: "center" }}>
-              <div style={{ fontSize: "0.7rem", color: "#5a9a6a", marginBottom: "0.2rem" }}>{DAY_NAMES[i]}</div>
+            <div key={i} style={{ flex: 1, padding: "0.6rem 0.4rem", borderRadius: "10px", background: "#f0fdf4", border: "1px solid #d1fae5", textAlign: "center" }}>
+              <div style={{ fontSize: "0.7rem", color: "#6b7280", marginBottom: "0.2rem" }}>{DAY_NAMES[i]}</div>
               <div style={{ fontSize: "1.35rem", lineHeight: 1.2 }}>{info.icon}</div>
-              <div style={{ fontSize: "0.68rem", color: "#7ab88a", margin: "0.15rem 0" }}>{info.label}</div>
-              <div style={{ fontSize: "0.83rem", color: "#fde68a", fontWeight: "bold" }}>
-                {Math.round(weather.temperature_2m_max[i])}° <span style={{ color: "#5a9a6a", fontWeight: "normal" }}>/ {Math.round(weather.temperature_2m_min[i])}°</span>
+              <div style={{ fontSize: "0.68rem", color: "#047857", margin: "0.15rem 0" }}>{info.label}</div>
+              <div style={{ fontSize: "0.83rem", color: "#064e3b", fontWeight: "600" }}>
+                {Math.round(weather.temperature_2m_max[i])}° <span style={{ color: "#9ca3af", fontWeight: "normal" }}>/ {Math.round(weather.temperature_2m_min[i])}°</span>
               </div>
-              {rain > 0 && <div style={{ fontSize: "0.67rem", color: "#60a5fa", marginTop: "0.1rem" }}>💧 {rain.toFixed(1)} mm</div>}
-              <div style={{ fontSize: "0.67rem", color: "#3d6b4a" }}>💨 {Math.round(weather.windspeed_10m_max[i])} km/h</div>
+              {rain > 0 && <div style={{ fontSize: "0.67rem", color: "#2563eb", marginTop: "0.1rem" }}>💧 {rain.toFixed(1)} mm</div>}
+              <div style={{ fontSize: "0.67rem", color: "#9ca3af" }}>💨 {Math.round(weather.windspeed_10m_max[i])} km/h</div>
             </div>
           );
         })}
@@ -310,12 +349,20 @@ export default function BikeAgent() {
 
       const data    = await response.json();
       const text    = data.content.filter(b => b.type === "text").map(b => b.text).join("");
-      const m       = text.match(/\{[\s\S]*\}/);
-      if (!m) throw new Error("Agent nevrátil správny formát odpovede.");
+      const jsonStr = extractFirstJSON(text);
+      if (!jsonStr) {
+        console.error("[BikeAgent] Raw AI response (no JSON found):", text);
+        throw new Error("Agent nevrátil správny formát odpovede.");
+      }
 
-      const parsed  = JSON.parse(jsonrepair(m[0]));
+      let parsed;
+      try {
+        parsed = JSON.parse(jsonrepair(jsonStr));
+      } catch (repairErr) {
+        console.error("[BikeAgent] Raw AI response:", text);
+        throw new Error(`Chyba spracovania JSON: ${repairErr.message}`);
+      }
       const usageData = data.usage || null;
-      const cost    = calcCost(usageData);
 
       setResult(parsed);
       setUsage(usageData);
@@ -323,7 +370,7 @@ export default function BikeAgent() {
       resetFilters();
 
       // Uloženie do histórie
-      const entry = { id: Date.now(), location, profile: { ...profile }, result: parsed, usage: usageData, cost };
+      const entry = { id: Date.now(), location, profile: { ...profile }, result: parsed, usage: usageData, cost: calcCost(usageData) };
       setHistory(prev => {
         const deduped = prev.filter(h => !(h.location === location && JSON.stringify(h.profile) === JSON.stringify(profile)));
         const next    = [entry, ...deduped].slice(0, 10);
@@ -339,37 +386,49 @@ export default function BikeAgent() {
     }
   };
 
-  const scoreColor = s => s >= 8 ? "#4ade80" : s >= 6 ? "#facc15" : "#f87171";
-  const diffColor  = d => d === "Ľahká" ? "#4ade80" : d === "Stredná" ? "#facc15" : "#f87171";
+  const scoreColor = s => s >= 8 ? "#059669" : s >= 6 ? "#d97706" : "#dc2626";
+  const diffColor  = d => d === "Ľahká" ? "#059669" : d === "Stredná" ? "#d97706" : "#dc2626";
 
   // ─── UI ───────────────────────────────────────────────────────────────────
   return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(160deg, #071a0f 0%, #0f2d1b 40%, #071a0f 100%)", fontFamily: "'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif", color: "#ddeee3", padding: "2rem 1.5rem" }}>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(150deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdf4 100%)", fontFamily: "system-ui, -apple-system, sans-serif", color: "#064e3b", padding: "1.5rem 1rem" }}>
       <style>{`
+        *, *::before, *::after { box-sizing: border-box; }
         @keyframes spin    { to { transform: rotate(360deg); } }
-        @keyframes fadeUp  { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes pulse   { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
-        input::placeholder { color: #3d6b4a; }
-        input:focus        { border-color: #4ade80 !important; outline: none; }
-        .route-card:hover  { border-color: #3d7a4d !important; }
-        .leaflet-popup-content-wrapper { background: #0f2d1b !important; color: #ddeee3 !important; border: 1px solid #2a5a35 !important; border-radius: 12px !important; }
-        .leaflet-popup-tip             { background: #0f2d1b !important; }
+        @keyframes fadeUp  { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes pulse   { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
+        input::placeholder { color: #9ca3af; }
+        input:focus        { border-color: #059669 !important; outline: none; box-shadow: 0 0 0 3px rgba(5,150,105,0.12) !important; }
+        button:hover:not(:disabled) { opacity: 0.88; }
+        .leaflet-popup-content-wrapper { background: #fff !important; color: #064e3b !important; border: 1px solid #d1fae5 !important; border-radius: 12px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.1) !important; }
+        .leaflet-popup-tip             { background: #fff !important; }
         .leaflet-popup-content         { margin: 10px 14px !important; }
+        @media (max-width: 540px) {
+          .search-row { flex-direction: column !important; }
+          .search-btn { width: 100% !important; }
+          .tab-header { flex-wrap: wrap !important; }
+          .tab-btn    { flex: 1 1 calc(50% - 0.3rem) !important; min-width: 130px !important; }
+          .route-badges { gap: 0.35rem !important; }
+          .poi-row { flex-direction: column !important; }
+        }
+        @media (max-width: 380px) {
+          .tab-btn { flex: 1 1 100% !important; border-radius: 8px !important; }
+        }
       `}</style>
 
       {/* Header */}
-      <header style={{ textAlign: "center", marginBottom: "2.5rem", animation: "fadeUp 0.6s ease" }}>
-        <div style={{ fontSize: "2.8rem", marginBottom: "0.6rem", filter: "drop-shadow(0 0 20px #22c55e66)" }}>🚴‍♀️</div>
-        <h1 style={{ margin: "0 0 0.35rem", fontSize: "clamp(1.8rem, 5vw, 2.8rem)", fontWeight: "normal", letterSpacing: "0.08em", background: "linear-gradient(100deg, #86efac 30%, #fde68a 80%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+      <header style={{ textAlign: "center", marginBottom: "2rem", animation: "fadeUp 0.5s ease" }}>
+        <div style={{ fontSize: "2.6rem", marginBottom: "0.5rem" }}>🚴‍♀️</div>
+        <h1 style={{ margin: "0 0 0.3rem", fontSize: "clamp(1.7rem, 5vw, 2.5rem)", fontWeight: "700", letterSpacing: "-0.01em", background: "linear-gradient(120deg, #059669 20%, #0284c7 80%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
           BikeAgent
         </h1>
-        <p style={{ margin: 0, color: "#5a9a6a", fontStyle: "italic", fontSize: "0.9rem" }}>
+        <p style={{ margin: 0, color: "#6b7280", fontSize: "0.9rem" }}>
           Cyklotrasy na mieru · Mapa · Predpoveď počasia
         </p>
       </header>
 
       {/* Profil skupiny */}
-      <div style={{ maxWidth: "620px", margin: "0 auto 1.6rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center", animation: "fadeUp 0.6s ease 0.05s both" }}>
+      <div style={{ maxWidth: "640px", margin: "0 auto 1.4rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center", animation: "fadeUp 0.5s ease 0.05s both" }}>
         {[
           { key: "hasEbike",    label: "⚡ E-bike",         depends: null },
           { key: "hasChildren", label: "👨‍👩‍👧 Deti",            depends: null },
@@ -383,13 +442,13 @@ export default function BikeAgent() {
               onClick={() => !disabled && toggleProfile(key)}
               title={disabled ? "Najprv zapni Deti" : undefined}
               style={{
-                padding: "0.45rem 1.05rem", borderRadius: "20px", border: "1.5px solid",
-                borderColor: disabled ? "#1a3325" : active ? "#22c55e" : "#2a4a35",
-                background:  disabled ? "rgba(255,255,255,0.02)" : active ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.04)",
-                color:       disabled ? "#2a4a35" : active ? "#86efac" : "#5a9a6a",
+                padding: "0.45rem 1.1rem", borderRadius: "20px", border: "1.5px solid",
+                borderColor: disabled ? "#e5e7eb" : active ? "#059669" : "#d1fae5",
+                background:  disabled ? "#f9fafb" : active ? "#ecfdf5" : "#fff",
+                color:       disabled ? "#d1d5db" : active ? "#059669" : "#6b7280",
                 fontSize: "0.85rem", cursor: disabled ? "default" : "pointer",
-                fontFamily: "inherit", transition: "all 0.2s",
-                opacity: disabled ? 0.5 : 1,
+                fontFamily: "inherit", fontWeight: active ? "600" : "normal",
+                transition: "all 0.15s", boxShadow: active ? "0 1px 4px rgba(5,150,105,0.15)" : "none",
               }}
             >
               {active && !disabled ? "✓ " : ""}{label}
@@ -400,15 +459,15 @@ export default function BikeAgent() {
 
       {/* História vyhľadávaní */}
       {history.length > 0 && (
-        <div style={{ maxWidth: "620px", margin: "0 auto 1.2rem", animation: "fadeUp 0.5s ease" }}>
+        <div style={{ maxWidth: "640px", margin: "0 auto 1rem", animation: "fadeUp 0.4s ease" }}>
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
-            <span style={{ fontSize: "0.72rem", color: "#3d6b4a", whiteSpace: "nowrap" }}>Nedávne:</span>
+            <span style={{ fontSize: "0.72rem", color: "#9ca3af", whiteSpace: "nowrap" }}>Nedávne:</span>
             {history.map(h => (
               <button
                 key={h.id}
                 onClick={() => { setLocation(h.location); setProfile(h.profile); setResult(h.result); setUsage(h.usage); resetFilters(); setPhase("done"); }}
                 title={`${h.location} · ${new Date(h.id).toLocaleDateString("sk")}`}
-                style={{ padding: "0.2rem 0.65rem", borderRadius: "20px", border: "1px solid #1e4d2b", background: "rgba(255,255,255,0.04)", color: "#7ab88a", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: "0.3rem", alignItems: "center" }}
+                style={{ padding: "0.2rem 0.65rem", borderRadius: "20px", border: "1px solid #e5e7eb", background: "#fff", color: "#047857", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", display: "flex", gap: "0.3rem", alignItems: "center", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" }}
               >
                 <span>{h.location}</span>
                 <span style={{ opacity: 0.6, fontSize: "0.7rem" }}>{profileIcons(h.profile)}</span>
@@ -416,7 +475,7 @@ export default function BikeAgent() {
             ))}
             <button
               onClick={() => { setHistory([]); try { localStorage.removeItem(HISTORY_KEY); } catch {} }}
-              style={{ padding: "0.2rem 0.55rem", borderRadius: "20px", border: "1px solid #2a1a1a", background: "transparent", color: "#3d3030", fontSize: "0.72rem", cursor: "pointer", fontFamily: "inherit" }}
+              style={{ padding: "0.2rem 0.55rem", borderRadius: "20px", border: "1px solid #fee2e2", background: "transparent", color: "#fca5a5", fontSize: "0.72rem", cursor: "pointer", fontFamily: "inherit" }}
               title="Vymazať históriu"
             >🗑️</button>
           </div>
@@ -424,29 +483,34 @@ export default function BikeAgent() {
       )}
 
       {/* Hľadanie */}
-      <div style={{ maxWidth: "620px", margin: "0 auto 2.5rem", display: "flex", gap: "0.75rem", animation: "fadeUp 0.6s ease 0.1s both" }}>
+      <div className="search-row" style={{ maxWidth: "640px", margin: "0 auto 2rem", display: "flex", gap: "0.6rem", animation: "fadeUp 0.5s ease 0.1s both" }}>
         <input
           value={location}
           onChange={e => setLocation(e.target.value)}
           onKeyDown={e => e.key === "Enter" && runAgent()}
           placeholder="Zadaj lokalitu, napr. Banská Bystrica"
           disabled={isLoading}
-          style={{ flex: 1, padding: "0.9rem 1.2rem", borderRadius: "14px", border: "1.5px solid #1e4d2b", background: "rgba(255,255,255,0.05)", color: "#ddeee3", fontSize: "1rem", transition: "border-color 0.2s", fontFamily: "inherit" }}
+          style={{ flex: 1, padding: "0.85rem 1.1rem", borderRadius: "12px", border: "1.5px solid #d1fae5", background: "#fff", color: "#064e3b", fontSize: "1rem", transition: "border-color 0.15s, box-shadow 0.15s", fontFamily: "inherit", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
         />
-        <button onClick={runAgent} disabled={isLoading || !location.trim()} style={{ padding: "0.9rem 1.6rem", borderRadius: "14px", border: "none", background: isLoading ? "rgba(34,197,94,0.15)" : "linear-gradient(135deg, #22c55e, #16a34a)", color: isLoading ? "#4ade80" : "#fff", fontWeight: "bold", fontSize: "0.95rem", cursor: isLoading ? "default" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
-          {isLoading ? "⏳ Pracujem..." : "🔍 Hľadaj"}
+        <button
+          className="search-btn"
+          onClick={runAgent}
+          disabled={isLoading || !location.trim()}
+          style={{ padding: "0.85rem 1.5rem", borderRadius: "12px", border: "none", background: isLoading ? "#e5e7eb" : "linear-gradient(135deg, #10b981, #059669)", color: isLoading ? "#9ca3af" : "#fff", fontWeight: "600", fontSize: "0.95rem", cursor: isLoading ? "default" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap", boxShadow: isLoading ? "none" : "0 2px 8px rgba(5,150,105,0.3)" }}
+        >
+          {isLoading ? "⏳ Pracujem…" : "🔍 Hľadaj"}
         </button>
       </div>
 
       {/* Loading */}
       {isLoading && (
         <div style={{ textAlign: "center", marginBottom: "2.5rem", animation: "fadeUp 0.4s ease" }}>
-          <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "1.2rem", background: "rgba(34,197,94,0.06)", border: "1px solid #1e4d2b", borderRadius: "20px", padding: "2rem 3rem" }}>
-            <div style={{ width: "36px", height: "36px", border: "3px solid #16a34a", borderTopColor: "#86efac", borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
-            <p style={{ margin: 0, color: "#86efac", fontStyle: "italic", animation: "pulse 2s infinite" }}>{phases[phaseIndex]}...</p>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "1.1rem", background: "#fff", border: "1px solid #d1fae5", borderRadius: "18px", padding: "1.8rem 2.5rem", boxShadow: "0 4px 20px rgba(5,150,105,0.1)" }}>
+            <div style={{ width: "34px", height: "34px", border: "3px solid #d1fae5", borderTopColor: "#059669", borderRadius: "50%", animation: "spin 0.85s linear infinite" }} />
+            <p style={{ margin: 0, color: "#047857", animation: "pulse 2s infinite", fontWeight: "500" }}>{phases[phaseIndex]}…</p>
+            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", justifyContent: "center" }}>
               {phases.map((step, i) => (
-                <div key={step} style={{ padding: "0.3rem 0.8rem", borderRadius: "20px", fontSize: "0.78rem", fontFamily: "monospace", background: i <= phaseIndex ? "rgba(34,197,94,0.18)" : "rgba(255,255,255,0.04)", border: `1px solid ${i <= phaseIndex ? "#22c55e" : "#1e4d2b"}`, color: i <= phaseIndex ? "#86efac" : "#3d6b4a", transition: "all 0.4s" }}>
+                <div key={step} style={{ padding: "0.25rem 0.75rem", borderRadius: "20px", fontSize: "0.77rem", background: i <= phaseIndex ? "#ecfdf5" : "#f9fafb", border: `1px solid ${i <= phaseIndex ? "#a7f3d0" : "#e5e7eb"}`, color: i <= phaseIndex ? "#059669" : "#9ca3af", transition: "all 0.35s" }}>
                   {i < phaseIndex ? "✓" : i === phaseIndex ? "▶" : "○"} {step}
                 </div>
               ))}
@@ -457,22 +521,24 @@ export default function BikeAgent() {
 
       {/* Chyba */}
       {phase === "error" && (
-        <div style={{ maxWidth: "620px", margin: "0 auto 2rem", padding: "1rem 1.4rem", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "14px", color: "#fca5a5" }}>
+        <div style={{ maxWidth: "640px", margin: "0 auto 2rem", padding: "1rem 1.3rem", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "12px", color: "#dc2626" }}>
           ⚠️ {error}
         </div>
       )}
 
       {/* Výsledky */}
       {result && (
-        <div style={{ maxWidth: "900px", margin: "0 auto", animation: "fadeUp 0.5s ease" }}>
+        <div style={{ maxWidth: "900px", margin: "0 auto", animation: "fadeUp 0.45s ease" }}>
 
-          <div style={{ background: "rgba(34,197,94,0.07)", border: "1px solid #1e4d2b", borderLeft: "4px solid #22c55e", borderRadius: "14px", padding: "1rem 1.4rem", marginBottom: "1.5rem" }}>
+          {/* Súhrn */}
+          <div style={{ background: "#fff", border: "1px solid #d1fae5", borderLeft: "4px solid #059669", borderRadius: "12px", padding: "1rem 1.3rem", marginBottom: "1.3rem", boxShadow: "0 1px 4px rgba(5,150,105,0.08)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
-              <p style={{ margin: 0, color: "#a7d9b2", lineHeight: 1.65, fontSize: "0.94rem" }}>
-                📍 <strong style={{ color: "#86efac" }}>{location}</strong> — {result.summary}
+              <p style={{ margin: 0, color: "#374151", lineHeight: 1.65, fontSize: "0.93rem" }}>
+                📍 <strong style={{ color: "#064e3b" }}>{location}</strong> — {result.summary}
               </p>
               {usage && (
-                <div style={{ flexShrink: 0, padding: "0.2rem 0.75rem", borderRadius: "20px", background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", fontSize: "0.75rem", color: "#a37f30", whiteSpace: "nowrap" }}
+                <div
+                  style={{ flexShrink: 0, padding: "0.2rem 0.7rem", borderRadius: "20px", background: "#fffbeb", border: "1px solid #fde68a", fontSize: "0.75rem", color: "#92400e", whiteSpace: "nowrap" }}
                   title={`Vstup: ${usage.inputTokens?.toLocaleString()} tokenov · Výstup: ${usage.outputTokens?.toLocaleString()} tokenov · Vyhľadávania: ${usage.searchCount}`}
                 >
                   💰 ~${calcCost(usage)?.toFixed(3)} · {usage.searchCount} 🔍
@@ -483,41 +549,41 @@ export default function BikeAgent() {
 
           {/* Filter */}
           {(result.routes?.length > 0) && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", alignItems: "center", marginBottom: "1.2rem", padding: "0.7rem 1rem", background: "rgba(255,255,255,0.025)", border: "1px solid #1a3d26", borderRadius: "12px" }}>
-              <span style={{ fontSize: "0.74rem", color: "#3d6b4a" }}>Filtre:</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", alignItems: "center", marginBottom: "1.1rem", padding: "0.65rem 0.9rem", background: "#fff", border: "1px solid #e5e7eb", borderRadius: "10px" }}>
+              <span style={{ fontSize: "0.74rem", color: "#9ca3af" }}>Filtre:</span>
               {["Ľahká", "Stredná", "Ťažká"].map(d => (
-                <button key={d} onClick={() => toggleDifficulty(d)} style={{ padding: "0.2rem 0.65rem", borderRadius: "20px", border: "1px solid", borderColor: filters.difficulty.includes(d) ? diffColor(d) : "#1e4d2b", background: filters.difficulty.includes(d) ? `${diffColor(d)}18` : "transparent", color: filters.difficulty.includes(d) ? diffColor(d) : "#5a9a6a", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit" }}>
+                <button key={d} onClick={() => toggleDifficulty(d)} style={{ padding: "0.2rem 0.65rem", borderRadius: "20px", border: "1px solid", borderColor: filters.difficulty.includes(d) ? diffColor(d) : "#e5e7eb", background: filters.difficulty.includes(d) ? `${diffColor(d)}12` : "transparent", color: filters.difficulty.includes(d) ? diffColor(d) : "#6b7280", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", fontWeight: filters.difficulty.includes(d) ? "600" : "normal" }}>
                   {d}
                 </button>
               ))}
               {profile.hasChildren && (
-                <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem", color: "#5a9a6a", cursor: "pointer" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem", color: "#6b7280", cursor: "pointer" }}>
                   <input type="range" min={0} max={10} value={filters.minScore} onChange={e => setFilters(f => ({ ...f, minScore: +e.target.value }))}
-                    style={{ width: "70px", accentColor: "#22c55e" }} />
+                    style={{ width: "70px", accentColor: "#059669" }} />
                   👶 min {filters.minScore}/10
                 </label>
               )}
               {profile.hasTrailer && (
-                <button onClick={() => setFilters(f => ({ ...f, trailerOnly: !f.trailerOnly }))} style={{ padding: "0.2rem 0.65rem", borderRadius: "20px", border: "1px solid", borderColor: filters.trailerOnly ? "#4ade80" : "#1e4d2b", background: filters.trailerOnly ? "rgba(74,222,128,0.12)" : "transparent", color: filters.trailerOnly ? "#4ade80" : "#5a9a6a", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit" }}>
+                <button onClick={() => setFilters(f => ({ ...f, trailerOnly: !f.trailerOnly }))} style={{ padding: "0.2rem 0.65rem", borderRadius: "20px", border: "1px solid", borderColor: filters.trailerOnly ? "#059669" : "#e5e7eb", background: filters.trailerOnly ? "#ecfdf5" : "transparent", color: filters.trailerOnly ? "#059669" : "#6b7280", fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", fontWeight: filters.trailerOnly ? "600" : "normal" }}>
                   🛻 Len vozík OK
                 </button>
               )}
               {(filters.difficulty.length > 0 || filters.minScore > 0 || filters.trailerOnly) && (
-                <button onClick={resetFilters} style={{ padding: "0.2rem 0.55rem", borderRadius: "20px", border: "1px solid #2a3a2a", background: "transparent", color: "#3d5a3d", fontSize: "0.74rem", cursor: "pointer", fontFamily: "inherit" }}>✕ Reset</button>
+                <button onClick={resetFilters} style={{ padding: "0.2rem 0.55rem", borderRadius: "20px", border: "1px solid #e5e7eb", background: "transparent", color: "#9ca3af", fontSize: "0.74rem", cursor: "pointer", fontFamily: "inherit" }}>✕ Reset</button>
               )}
-              <span style={{ marginLeft: "auto", fontSize: "0.74rem", color: "#3d6b4a" }}>
+              <span style={{ marginLeft: "auto", fontSize: "0.74rem", color: "#9ca3af" }}>
                 {filteredRoutes.length}/{result.routes.length} trás
               </span>
             </div>
           )}
 
           {result.centerLat && result.centerLng && (
-            <RouteMap routes={result.routes || []} centerLat={result.centerLat} centerLng={result.centerLng} />
+            <RouteMap routes={result.routes || []} centerLat={result.centerLat} centerLng={result.centerLng} location={location} />
           )}
 
           {/* Taby */}
           {filteredRoutes.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "2rem", color: "#3d6b4a", fontStyle: "italic", marginBottom: "2rem" }}>
+            <div style={{ textAlign: "center", padding: "2rem", color: "#9ca3af", fontStyle: "italic", marginBottom: "2rem" }}>
               Žiadne trasy nevyhovujú aktívnym filtrom.
             </div>
           ) : (() => {
@@ -527,89 +593,95 @@ export default function BikeAgent() {
             return (
               <div style={{ marginBottom: "2rem" }}>
                 {/* Tab hlavičky */}
-                <div style={{ display: "flex", gap: "0.4rem", overflowX: "auto", padding: "0.5rem 0.5rem 0", background: "rgba(0,0,0,0.25)", borderRadius: "14px 14px 0 0", border: "1px solid #1a3d26", borderBottom: "none" }}>
+                <div
+                  className="tab-header"
+                  style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", padding: "0.5rem 0.5rem 0", background: "#f9fafb", borderRadius: "14px 14px 0 0", border: "1px solid #e5e7eb", borderBottom: "none" }}
+                >
                   {filteredRoutes.map((r, i) => {
                     const c      = ROUTE_COLORS[i % ROUTE_COLORS.length];
                     const active = i === tabIdx;
                     return (
                       <button
                         key={i}
+                        className="tab-btn"
                         onClick={() => setActiveTab(i)}
                         style={{
-                          flexShrink: 0, padding: "0.55rem 1.1rem 0.7rem",
-                          border: `1.5px solid ${active ? c : "#1e4d2b"}`,
-                          borderBottom: active ? `1.5px solid ${color}20` : "1.5px solid #1e4d2b",
+                          flex: "1 1 auto", minWidth: "120px", maxWidth: "260px",
+                          padding: "0.5rem 0.85rem 0.65rem",
+                          border: `1.5px solid ${active ? c : "#e5e7eb"}`,
+                          borderBottom: active ? `1.5px solid ${color}20` : "1.5px solid #e5e7eb",
                           borderRadius: "10px 10px 0 0",
-                          background: active ? `linear-gradient(180deg, ${c}28 0%, ${c}10 100%)` : "rgba(255,255,255,0.03)",
-                          color: active ? c : "#4a7a5a",
-                          fontSize: "0.84rem", cursor: "pointer",
-                          fontFamily: "inherit", transition: "all 0.18s", whiteSpace: "nowrap",
-                          fontWeight: active ? "600" : "normal",
-                          boxShadow: active ? `0 -2px 8px ${c}22` : "none",
+                          background: active ? `linear-gradient(180deg, ${c}18 0%, ${c}08 100%)` : "#fff",
+                          color: active ? c : "#6b7280",
+                          fontSize: "0.83rem", cursor: "pointer",
+                          fontFamily: "inherit", transition: "all 0.15s",
+                          fontWeight: active ? "700" : "normal",
+                          boxShadow: active ? `0 -2px 6px ${c}18` : "none",
                           marginBottom: active ? "-1.5px" : "0",
+                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                         }}
                       >
                         <span style={{
                           display: "inline-flex", alignItems: "center", justifyContent: "center",
-                          width: "1.3rem", height: "1.3rem", borderRadius: "50%",
-                          background: active ? c : "#1e4d2b",
-                          color: active ? "#000" : "#3d6b4a",
-                          fontSize: "0.72rem", fontFamily: "monospace", fontWeight: "bold",
-                          marginRight: "0.45rem", flexShrink: 0,
+                          width: "1.25rem", height: "1.25rem", borderRadius: "50%",
+                          background: active ? c : "#e5e7eb",
+                          color: active ? "#fff" : "#6b7280",
+                          fontSize: "0.7rem", fontWeight: "bold",
+                          marginRight: "0.4rem", flexShrink: 0,
                         }}>{i + 1}</span>
-                        {r.name.length > 20 ? r.name.slice(0, 19) + "…" : r.name}
+                        {r.name.length > 22 ? r.name.slice(0, 21) + "…" : r.name}
                       </button>
                     );
                   })}
                 </div>
 
                 {/* Obsah tabu */}
-                <div style={{ background: "rgba(255,255,255,0.03)", border: `1.5px solid ${color}`, borderTop: `3px solid ${color}`, borderRadius: "0 0 18px 18px", padding: "1.4rem 1.6rem" }}>
+                <div style={{ background: "#fff", border: `1.5px solid ${color}55`, borderTop: `3px solid ${color}`, borderRadius: "0 0 16px 16px", padding: "1.3rem 1.4rem", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
 
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.9rem" }}>
-                    <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#fde68a", fontWeight: "normal" }}>
-                      <span style={{ color, marginRight: "0.5rem", fontFamily: "monospace" }}>{tabIdx + 1}.</span>{route.name}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.85rem" }}>
+                    <h3 style={{ margin: 0, fontSize: "1.1rem", color: "#064e3b", fontWeight: "700" }}>
+                      <span style={{ color, marginRight: "0.4rem" }}>{tabIdx + 1}.</span>{route.name}
                     </h3>
                     {profile.hasChildren && route.childFriendlyScore != null && (
-                      <div style={{ padding: "0.25rem 0.85rem", borderRadius: "20px", background: `${scoreColor(route.childFriendlyScore)}18`, border: `1px solid ${scoreColor(route.childFriendlyScore)}55`, fontSize: "0.82rem", color: scoreColor(route.childFriendlyScore), fontFamily: "monospace" }}>
+                      <div style={{ padding: "0.2rem 0.8rem", borderRadius: "20px", background: `${scoreColor(route.childFriendlyScore)}12`, border: `1px solid ${scoreColor(route.childFriendlyScore)}44`, fontSize: "0.82rem", color: scoreColor(route.childFriendlyScore), fontWeight: "600" }}>
                         👶 {route.childFriendlyScore}/10
                       </div>
                     )}
                   </div>
 
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", marginBottom: "0.9rem" }}>
+                  <div className="route-badges" style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "0.85rem" }}>
                     {[{ icon: "📏", val: route.distance }, { icon: "🛣️", val: route.surface }, { icon: "⛰️", val: route.elevation }].map(t => (
-                      <span key={t.val} style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid #1e4d2b", fontSize: "0.82rem", color: "#9ec9aa" }}>{t.icon} {t.val}</span>
+                      <span key={t.val} style={{ padding: "0.22rem 0.7rem", borderRadius: "8px", background: "#f0fdf4", border: "1px solid #d1fae5", fontSize: "0.82rem", color: "#374151" }}>{t.icon} {t.val}</span>
                     ))}
-                    <span style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: `${diffColor(route.difficulty)}12`, border: `1px solid ${diffColor(route.difficulty)}44`, fontSize: "0.82rem", color: diffColor(route.difficulty) }}>💪 {route.difficulty}</span>
-                    {profile.hasEbike && <span style={{ padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.35)", fontSize: "0.82rem", color: "#c4b5fd" }}>⚡ E-bike</span>}
+                    <span style={{ padding: "0.22rem 0.7rem", borderRadius: "8px", background: `${diffColor(route.difficulty)}10`, border: `1px solid ${diffColor(route.difficulty)}44`, fontSize: "0.82rem", color: diffColor(route.difficulty), fontWeight: "600" }}>💪 {route.difficulty}</span>
+                    {profile.hasEbike && <span style={{ padding: "0.22rem 0.7rem", borderRadius: "8px", background: "#eff6ff", border: "1px solid #bfdbfe", fontSize: "0.82rem", color: "#2563eb" }}>⚡ E-bike</span>}
                   </div>
 
                   {profile.hasTrailer && route.trailerFriendly && (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.9rem", borderRadius: "10px", marginBottom: "0.8rem", background: route.trailerFriendly.startsWith("Áno") ? "rgba(74,222,128,0.1)" : route.trailerFriendly.startsWith("Čias") ? "rgba(251,191,36,0.1)" : "rgba(248,113,113,0.1)", border: `1px solid ${route.trailerFriendly.startsWith("Áno") ? "rgba(74,222,128,0.35)" : route.trailerFriendly.startsWith("Čias") ? "rgba(251,191,36,0.35)" : "rgba(248,113,113,0.35)"}`, fontSize: "0.82rem", color: route.trailerFriendly.startsWith("Áno") ? "#4ade80" : route.trailerFriendly.startsWith("Čias") ? "#fbbf24" : "#f87171" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.9rem", borderRadius: "10px", marginBottom: "0.8rem", background: route.trailerFriendly.startsWith("Áno") ? "#ecfdf5" : route.trailerFriendly.startsWith("Čias") ? "#fffbeb" : "#fef2f2", border: `1px solid ${route.trailerFriendly.startsWith("Áno") ? "#a7f3d0" : route.trailerFriendly.startsWith("Čias") ? "#fde68a" : "#fecaca"}`, fontSize: "0.82rem", color: route.trailerFriendly.startsWith("Áno") ? "#059669" : route.trailerFriendly.startsWith("Čias") ? "#d97706" : "#dc2626", fontWeight: "500" }}>
                       🛻 Prívesný vozík: {route.trailerFriendly}
                     </div>
                   )}
 
-                  <p style={{ margin: "0 0 0.5rem", color: "#b8d9bf", fontSize: "0.88rem", lineHeight: 1.6 }}>✨ {route.highlights}</p>
-                  <p style={{ margin: "0 0 0.5rem", color: "#86efac", fontSize: "0.88rem", fontStyle: "italic", lineHeight: 1.5 }}>💡 {route.recommendation}</p>
-                  {route.warnings && route.warnings !== "null" && <p style={{ margin: "0 0 0.5rem", color: "#fbbf24", fontSize: "0.83rem" }}>⚠️ {route.warnings}</p>}
+                  <p style={{ margin: "0 0 0.5rem", color: "#374151", fontSize: "0.88rem", lineHeight: 1.65 }}>✨ {route.highlights}</p>
+                  <p style={{ margin: "0 0 0.5rem", color: "#059669", fontSize: "0.88rem", fontStyle: "italic", lineHeight: 1.5 }}>💡 {route.recommendation}</p>
+                  {route.warnings && route.warnings !== "null" && <p style={{ margin: "0 0 0.5rem", color: "#d97706", fontSize: "0.83rem", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "0.4rem 0.7rem" }}>⚠️ {route.warnings}</p>}
 
                   <WeatherForecast lat={route.startLat} lng={route.startLng} />
 
                   {route.pointsOfInterest?.length > 0 && (
-                    <div style={{ marginTop: "1rem", borderTop: "1px solid #1a3d26", paddingTop: "1rem" }}>
-                      <p style={{ margin: "0 0 0.55rem", fontSize: "0.78rem", color: "#5a9a6a", letterSpacing: "0.06em", textTransform: "uppercase" }}>🏛️ Zaujímavosti do 10 km</p>
+                    <div style={{ marginTop: "1rem", borderTop: "1px solid #e5e7eb", paddingTop: "1rem" }}>
+                      <p style={{ margin: "0 0 0.55rem", fontSize: "0.78rem", color: "#047857", letterSpacing: "0.05em", textTransform: "uppercase", fontWeight: "600" }}>🏛️ Zaujímavosti do 10 km</p>
                       <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
                         {route.pointsOfInterest.map((poi, j) => (
-                          <div key={j} style={{ display: "flex", gap: "0.7rem", padding: "0.5rem 0.75rem", borderRadius: "10px", background: "rgba(255,255,255,0.025)", border: "1px solid #172e1f" }}>
-                            <span style={{ fontSize: "1rem", flexShrink: 0 }}>{POI_ICONS[poi.type] || "📍"}</span>
+                          <div key={j} style={{ display: "flex", gap: "0.65rem", padding: "0.5rem 0.75rem", borderRadius: "10px", background: "#f9fafb", border: "1px solid #e5e7eb" }}>
+                            <span style={{ fontSize: "1.05rem", flexShrink: 0 }}>{POI_ICONS[poi.type] || "📍"}</span>
                             <div>
                               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                                <span style={{ fontSize: "0.84rem", color: "#fde68a" }}>{poi.name}</span>
-                                <span style={{ fontSize: "0.74rem", color: "#3d6b4a" }}>{poi.distance}</span>
+                                <span style={{ fontSize: "0.84rem", color: "#064e3b", fontWeight: "600" }}>{poi.name}</span>
+                                <span style={{ fontSize: "0.74rem", color: "#9ca3af" }}>{poi.distance}</span>
                               </div>
-                              <p style={{ margin: 0, fontSize: "0.79rem", color: "#7ab88a", lineHeight: 1.5 }}>{poi.description}</p>
+                              <p style={{ margin: 0, fontSize: "0.79rem", color: "#6b7280", lineHeight: 1.5 }}>{poi.description}</p>
                             </div>
                           </div>
                         ))}
@@ -617,19 +689,19 @@ export default function BikeAgent() {
                     </div>
                   )}
 
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.8rem", borderTop: "1px solid #1a3d26", paddingTop: "0.7rem", alignItems: "center" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.85rem", borderTop: "1px solid #e5e7eb", paddingTop: "0.7rem", alignItems: "center" }}>
                     {route.startLat && route.startLng && (
                       <a href={`https://mapy.cz/cyklo?x=${route.startLng}&y=${route.startLat}&z=15&source=coor&id=${route.startLng},${route.startLat}`}
                         target="_blank" rel="noopener noreferrer"
-                        style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.25rem 0.75rem", borderRadius: "8px", background: "rgba(234,88,12,0.12)", border: "1px solid rgba(234,88,12,0.4)", fontSize: "0.8rem", color: "#fb923c", textDecoration: "none" }}>
+                        style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", padding: "0.25rem 0.75rem", borderRadius: "8px", background: "#fff7ed", border: "1px solid #fed7aa", fontSize: "0.8rem", color: "#ea580c", textDecoration: "none", fontWeight: "500" }}>
                         🗺️ Otvoriť v Mapy.cz
                       </a>
                     )}
                     {route.sources?.length > 0 && (
                       <>
-                        <span style={{ fontSize: "0.74rem", color: "#3d6b4a" }}>Zdroje:</span>
+                        <span style={{ fontSize: "0.74rem", color: "#9ca3af" }}>Zdroje:</span>
                         {route.sources.map(src => (
-                          <span key={src} style={{ padding: "0.15rem 0.6rem", borderRadius: "6px", background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.3)", fontSize: "0.74rem", color: "#a5b4fc" }}>🔗 {src}</span>
+                          <span key={src} style={{ padding: "0.15rem 0.6rem", borderRadius: "6px", background: "#eff6ff", border: "1px solid #bfdbfe", fontSize: "0.74rem", color: "#2563eb" }}>🔗 {src}</span>
                         ))}
                       </>
                     )}
@@ -640,16 +712,16 @@ export default function BikeAgent() {
           })()}
 
           {result.generalTips && (
-            <div style={{ background: "rgba(251,191,36,0.05)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: "16px", padding: "1.2rem 1.5rem", marginBottom: "2rem" }}>
-              <h4 style={{ margin: "0 0 0.5rem", color: "#fde68a", fontWeight: "normal", fontSize: "0.95rem" }}>
+            <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "14px", padding: "1.1rem 1.4rem", marginBottom: "2rem" }}>
+              <h4 style={{ margin: "0 0 0.45rem", color: "#92400e", fontWeight: "600", fontSize: "0.93rem" }}>
                 🌿 Tipy pre {!profile.hasChildren ? "cyklistov" : profile.hasTrailer ? "e-bike rodinu s prívesným vozíkom" : profile.hasEbike ? "e-bike rodinu s deťmi" : "rodinu s deťmi"}
               </h4>
-              <p style={{ margin: 0, color: "#9ec9aa", lineHeight: 1.65, fontSize: "0.88rem" }}>{result.generalTips}</p>
+              <p style={{ margin: 0, color: "#78350f", lineHeight: 1.65, fontSize: "0.88rem" }}>{result.generalTips}</p>
             </div>
           )}
 
           <div style={{ textAlign: "center" }}>
-            <button onClick={() => { setPhase("idle"); setResult(null); setLocation(""); }} style={{ padding: "0.65rem 1.5rem", borderRadius: "10px", border: "1px solid #1e4d2b", background: "transparent", color: "#5a9a6a", fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
+            <button onClick={() => { setPhase("idle"); setResult(null); setLocation(""); }} style={{ padding: "0.6rem 1.4rem", borderRadius: "10px", border: "1px solid #d1fae5", background: "#fff", color: "#047857", fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
               🔄 Nové hľadanie
             </button>
           </div>
@@ -657,8 +729,8 @@ export default function BikeAgent() {
       )}
 
       {phase === "idle" && !result && (
-        <div style={{ textAlign: "center", color: "#2d5a3a", marginTop: "3rem", fontSize: "0.9rem", fontStyle: "italic" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.75rem", opacity: 0.4 }}>🗺️</div>
+        <div style={{ textAlign: "center", color: "#9ca3af", marginTop: "3rem", fontSize: "0.9rem" }}>
+          <div style={{ fontSize: "2rem", marginBottom: "0.75rem", opacity: 0.35 }}>🗺️</div>
           Zadaj lokalitu — agent nájde trasy, zobrazí ich na mape<br />a pridá predpoveď počasia na 3 dni.
         </div>
       )}
