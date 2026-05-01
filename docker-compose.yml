@@ -1,4 +1,5 @@
 services:
+
   app:
     build:
       context: .
@@ -10,5 +11,33 @@ services:
     env_file: .env
     environment:
       - NODE_ENV=production
+    # Bez verejného portu — prístup iba cez Caddy.
+    # Pre priamy prístup (debug) odkomentuj:
+    # ports:
+    #   - "8080:3001"
+    networks:
+      - internal
+
+  caddy:
+    build:
+      context: ./caddy
+      dockerfile: Dockerfile
+    container_name: cyclo-caddy
+    restart: unless-stopped
     ports:
-      - "8080:3001"
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Sem vlož cert.pem a key.pem
+      - ./certs:/etc/caddy/certs:ro
+      - caddy_logs:/var/log/caddy
+    depends_on:
+      - app
+    networks:
+      - internal
+
+networks:
+  internal:
+
+volumes:
+  caddy_logs:

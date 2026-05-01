@@ -1,0 +1,44 @@
+{
+    # Automatický HTTPS vypnutý — certifikát spravujeme ručne
+    auto_https off
+    admin off
+}
+
+# HTTPS endpoint
+:443 {
+    tls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem
+
+    encode gzip
+
+    reverse_proxy app:3001 {
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+        # Timeout pre dlhé AI vyhľadávania (DeepSeek môže trvať 60s+)
+        transport http {
+            response_header_timeout 120s
+            dial_timeout 10s
+        }
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Skryj server hlavičku
+        -Server
+    }
+
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+        format json
+    }
+}
+
+# HTTP → HTTPS redirect
+:80 {
+    redir https://{host}{uri} 301
+}

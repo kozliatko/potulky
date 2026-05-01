@@ -3,3 +3,7 @@ node_modules/
 dist/
 .DS_Store
 *.log
+# TLS certifikáty — nikdy do gitu
+certs/*.pem
+certs/*.crt
+certs/*.key
