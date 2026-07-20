@@ -11,38 +11,26 @@ services:
     env_file: .env
     environment:
       - NODE_ENV=production
-    # Bez verejného portu — prístup iba cez Caddy.
-    # Pre priamy prístup (debug) odkomentuj:
-    # ports:
-    #   - "8080:3001"
-    networks:
-      - internal
-
-  caddy:
-    build:
-      context: ./caddy
-      dockerfile: Dockerfile
-    container_name: cyclo-caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      # E-mail pre Let's Encrypt notifikácie o expirácii
-      - CADDY_ACME_EMAIL=${CADDY_ACME_EMAIL}
     volumes:
-      # Let's Encrypt certifikáty — musia byť perzistentné (inak Caddy žiada nový cert pri každom reštarte)
-      - caddy_data:/data
-      - caddy_logs:/var/log/caddy
-    depends_on:
-      - app
+      - app_data:/app/data
     networks:
-      - internal
+      - default
+      - caddy
+    labels:
+      caddy: potulky.kozliatko.sk
+      caddy.reverse_proxy: "{{upstreams 3001}}"
+      caddy.encode: gzip zstd
+      caddy.reverse_proxy.transport: http
+      caddy.reverse_proxy.transport.read_timeout: 300s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
-  internal:
+  caddy:
+    external: true
 
 volumes:
-  # Uloženie Let's Encrypt certifikátov medzi reštartmi
-  caddy_data:
-  caddy_logs:
+  app_data:

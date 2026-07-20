@@ -230,6 +230,47 @@ docker compose -f docker-compose.dev.yml up --build
 
 ---
 
+## Testovanie
+
+### Unit testy (backend)
+
+```bash
+cd backend && npm test
+```
+
+Testujú Express routes, validáciu vstupu a auth middleware s mocknutým AI klientom (Vitest + Supertest).
+
+### Smoke testy — overenie živej aplikácie
+
+Idú proti bežiacim Docker kontajnerom, nevyžadujú lokálny Node.js:
+
+```bash
+docker run --rm \
+  --network cyclo-agent_internal \
+  -e BASE_URL=http://cyclo-agent:3001 \
+  -v $(pwd)/tests:/tests \
+  node:22-alpine node --test /tests/smoke.test.js
+```
+
+Čo overujú:
+
+| Skupina | Testy |
+|---|---|
+| Health | `GET /health` → 200, `status:ok`, timestamp |
+| Frontend | `/` vracia HTML, favicon, PWA ikona, SPA fallback |
+| API validácia | Chybné requesty → 400/401 s `error` poľom |
+| API auth | Nesprávny token → 401 |
+| API routing | Neznámy endpoint → 404 |
+| Bezpečnostné hlavičky | `X-Content-Type-Options`, server header skrytý |
+
+### Spustiť všetky testy
+
+```bash
+npm run test:all
+```
+
+---
+
 ## Správa
 
 ```bash
@@ -261,6 +302,10 @@ bikeagent/
 ├── Dockerfile                  # multi-stage build: React → Node server
 ├── .env.example                # šablóna env premenných
 ├── .env                        # tvoje API kľúče (nie v gite!)
+├── package.json                # skripty na spustenie testov
+│
+├── tests/
+│   └── smoke.test.js           # smoke testy — overenie že app beží
 │
 ├── backend/
 │   ├── server.js               # Express server

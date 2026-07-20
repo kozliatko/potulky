@@ -7,11 +7,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      injectRegister: "auto",
+      selfDestroying: false,
       includeAssets: ["favicon.ico", "icon.svg", "apple-touch-icon-180x180.png"],
       manifest: {
-        name: "BikeAgent – Rodinné cyklotrasy",
-        short_name: "BikeAgent",
-        description: "AI agent pre hľadanie rodinných cyklociest. Vyhľadá trasy, zobrazí ich na mape a pridá predpoveď počasia.",
+        name: "Potulky – Cyklotrasy & Turistika",
+        short_name: "Potulky",
+        description: "AI agent pre hľadanie cyklotrás a turistických vychádzok. Trasy na mieru pre rodiny s deťmi, kočíkom aj e-bike.",
         theme_color: "#059669",
         background_color: "#f0fdf4",
         display: "standalone",
@@ -27,9 +29,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Kešuj všetky statické assets vrátane JS/CSS
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-        // Sieťové volania (API, počasie, mapa) idú vždy cez sieť
+        navigateFallbackDenylist: [/^\/history$/],
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^\/api\//,
