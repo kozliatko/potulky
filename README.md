@@ -286,3 +286,4 @@ Pozri [CHANGELOG.md](CHANGELOG.md) pre kompletnú históriu zmien.
 - Profil skupiny, história vyhľadávaní, filtrovanie trás
 
 
+
