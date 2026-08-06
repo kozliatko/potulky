@@ -1,17 +1,9 @@
 # Potulky
 
-AI agent pre hľadanie rodinných cyklociest a turistických trás. Podľa zadanej lokality (alebo GPS polohy) vyhľadá vhodné trasy, zobrazí ich na mape a pridá predpoveď počasia.
+AI agent pre hľadanie rodinných cyklociest a turistických trás. Podľa zadanej lokality (alebo GPS polohy) a parametrov vyhľadá vhodné trasy, zobrazí ich na mape a pridá predpoveď počasia.
+Hobby projekt pre vlastnú potrebu robený po večeroch počas venčenia psa.
 
 **URL:** https://potulky.kozliatko.sk
-
-## Vetvy
-
-| Vetva      | AI model                  | Vyhľadávanie          | API kľúče                          |
-|------------|---------------------------|-----------------------|------------------------------------|
-| `main`     | Claude Sonnet (Anthropic) | natívny web_search    | `ANTHROPIC_API_KEY`                |
-| `deepseek` | DeepSeek V3               | Tavily Search API     | `DEEPSEEK_API_KEY`, `TAVILY_API_KEY` |
-
----
 
 ## Architektúra
 
