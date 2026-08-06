@@ -553,12 +553,19 @@ export default function BikeAgent() {
                       <>
                         <span style={{ fontSize: "0.74rem", color: "#9ca3af" }}>Zdroje:</span>
                         {route.sources.map(src => {
-                          const href = src.startsWith("http") ? src : `https://${src}`;
-                          let label = src;
-                          try { label = new URL(href).hostname.replace(/^www\./, ""); } catch {}
-                          return (
-                            <a key={src} href={href} target="_blank" rel="noopener noreferrer" style={{ padding: "0.15rem 0.6rem", borderRadius: "6px", background: "#eff6ff", border: "1px solid #bfdbfe", fontSize: "0.74rem", color: "#2563eb", textDecoration: "none" }}>🔗 {label}</a>
-                          );
+                          const raw = src.startsWith("http") ? src : `https://${src}`;
+                          let href = null, label = src;
+                          try {
+                            const u = new URL(raw);
+                            if (u.hostname.includes(".") && !u.hostname.includes(" ")) {
+                              href = raw;
+                              label = u.hostname.replace(/^www\./, "");
+                            }
+                          } catch {}
+                          const shared = { display: "inline-flex", alignItems: "center", gap: "0.25rem", padding: "0.25rem 0.75rem", borderRadius: "8px", background: "#eff6ff", border: "1px solid #bfdbfe", fontSize: "0.8rem", fontWeight: "500" };
+                          return href
+                            ? <a key={src} href={href} target="_blank" rel="noopener noreferrer" style={{ ...shared, color: "#2563eb", textDecoration: "none", cursor: "pointer" }}>🔗 {label}</a>
+                            : <span key={src} style={{ ...shared, color: "#6b7280" }}>📄 {src}</span>;
                         })}
                       </>
                     )}

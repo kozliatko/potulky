@@ -80,7 +80,7 @@ Funguje v PWA aj prehliadači. Vyžaduje povolenie od používateľa.
 ```
 POST /api/messages
   └── authMiddleware        (x-api-token hlavička, ak API_SECRET_TOKEN nastavený)
-  └── rateLimiter           (20 req/min na IP)
+  └── rateLimiter           (globálny: 120 req/min; API: 20 req/min na IP)
   └── runAgent()
         └── agentic loop: DeepSeek V3 + Tavily Search (max 10 vyhľadávaní, max 25 iterácií)
   └── insertSearch()        (SQLite logging)

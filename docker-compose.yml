@@ -22,6 +22,9 @@ services:
       caddy.encode: gzip zstd
       caddy.reverse_proxy.transport: http
       caddy.reverse_proxy.transport.read_timeout: 300s
+      caddy.log: ""
+      caddy.log.output: stderr
+      caddy.log.format: json
     logging:
       driver: json-file
       options:

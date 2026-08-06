@@ -34,7 +34,7 @@ async function tavilySearch(query) {
   if (!res.ok) throw new Error(`Tavily error: ${res.status}`);
   const data = await res.json();
   const results = (data.results || [])
-    .map(r => `**${r.title}**\n${r.url}\n${r.content}`)
+    .map(r => `**${r.title}**\n${r.url}\n${r.content.slice(0, 800)}`)
     .join("\n\n---\n\n");
   return data.answer ? `${data.answer}\n\n${results}` : results;
 }
@@ -122,12 +122,21 @@ app.use(cors({
 
 const limiter = rateLimit({
   windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Príliš veľa požiadaviek. Skús o chvíľu." },
+});
+app.use(limiter);
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Príliš veľa požiadaviek. Skús o chvíľu." },
 });
-app.use("/api/", limiter);
+app.use("/api/", apiLimiter);
 
 const authMiddleware = (req, res, next) => {
   if (!process.env.API_SECRET_TOKEN) return next();
@@ -312,6 +321,14 @@ app.use("/api/", (req, res) => {
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
+});
+
+app.use((err, req, res, next) => {
+  if (err instanceof URIError) {
+    console.warn(`[Scan] 400 – URIError | IP: ${req.ip} | path: ${req.path}`);
+    return res.status(400).end();
+  }
+  next(err);
 });
 
 // ─── Spustenie ──────────────────────────────────────────────────────────────
