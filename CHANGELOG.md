@@ -12,9 +12,15 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - URIError error handler — loguje IP a cestu pri pokusoch o path traversal
 - Caddy access log cez Docker labels (`caddy.log`, `caddy.log.output`, `caddy.log.format`)
 - Fail2ban na hoste — ochrana všetkých webov cez Caddy JSON logy
+- `/history` chránený Caddy `basic_auth` (path-scoped na `/history*`) namiesto zdieľaného `x-api-token`
+- Fail-fast štart v produkcii — appka odmietne naštartovať bez `API_SECRET_TOKEN`
 
 ### Fixed
 - Klikateľné zdroje — validácia URL cez `new URL()`, neplatné hodnoty zobrazené ako `<span>`
+- Git história vyčistená od uniknutého `.env~` (obsahoval produkčné secrets)
+
+### Security
+- `/history` už nezdieľa token s frontend bundlom (`VITE_API_SECRET_TOKEN` bol viditeľný v DevTools) — nahradené samostatným bcrypt heslom cez Caddy
 
 ### Removed
 - `caddy/Caddyfile` a `caddy/Dockerfile` — nahradené caddy-docker-proxy labelmi
@@ -36,7 +42,7 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Caddy timeout predĺžený: 120 s → 300 s (pre zahraničné lokality)
 
 ### Changed
-- Projekt premenovaný: **BikeAgent → Potulky** (potulky.kozliatko.sk)
+- Projekt premenovaný: **BikeAgent → Potulky**
 - Deployment: lokálny Caddy kontajner → **caddy-docker-proxy** (labely)
 - Tavily výsledky skrátené na 800 znakov (prevencia timeoutov)
 

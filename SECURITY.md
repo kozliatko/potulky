@@ -15,15 +15,16 @@ V správe uveďte:
 
 | Oblasť | Pokrytá |
 |--------|---------|
-| Backend API (`/api/messages`, `/history`) | ✅ |
-| Autentifikácia (`x-api-token`) | ✅ |
+| Backend API (`/api/messages`) | ✅ |
+| `/history` (Caddy basic_auth) | ✅ |
 | Rate limiting | ✅ |
 | Frontend (React/Vite) | ✅ |
 | Docker / deployment konfigurácia | ✅ |
 
 ## Aktuálne opatrenia
 
-- API chránené voliteľným `x-api-token` (hlavička)
+- `/api/messages` chránené voliteľným `x-api-token` (hlavička, v produkcii povinné — appka odmietne naštartovať bez `API_SECRET_TOKEN`)
+- `/history` chránené samostatne cez Caddy `basic_auth` (path-scoped na `/history*`, bcrypt hash v `.env`) — token sa nikdy nedostane do frontend bundlu
 - Rate limit: globálny 120 req/min, API 20 req/min na IP
 - Fail2ban blokuje skenery na základe Caddy access logov
 - Citlivé premenné výhradne cez `.env` (nie v kóde)

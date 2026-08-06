@@ -3,8 +3,6 @@
 AI agent pre hľadanie rodinných cyklociest a turistických trás. Podľa zadanej lokality (alebo GPS polohy) a parametrov vyhľadá vhodné trasy, zobrazí ich na mape a pridá predpoveď počasia.
 Hobby projekt pre vlastnú potrebu robený po večeroch počas venčenia psa.
 
-**URL:** https://potulky.kozliatko.sk
-
 ## Architektúra
 
 ```
@@ -18,7 +16,7 @@ cyclo-agent kontajner  (port 3001, interný)
    │
    ├── Express.js backend  (server.js)
    │     ├── POST /api/messages   — agentic loop (DeepSeek + Tavily)
-   │     ├── GET  /history        — história vyhľadávaní (chránené tokenom)
+   │     ├── GET  /history        — história vyhľadávaní (chránené Caddy basic_auth)
    │     ├── GET  /health         — health check
    │     └── GET  *               — SPA fallback (React frontend)
    │
@@ -79,7 +77,7 @@ POST /api/messages
   └── { content: [{ type: "text", text }], usage }
 
 GET /history
-  └── authMiddleware        (x-api-token povinný)
+  └── Caddy basic_auth      (path-scoped, gatuje request pred appkou)
   └── HTML tabuľka vyhľadávaní s filtráciou
 
 GET /health               → { status: "ok", timestamp }
@@ -113,7 +111,7 @@ GET *                     → index.html  (SPA fallback)
 
 - Docker + Docker Compose v2
 - Centrálna `caddy-docker-proxy` sieť: `docker network create caddy`
-- API kľúče podľa aktívnej vetvy
+- `DEEPSEEK_API_KEY`, `TAVILY_API_KEY`
 
 ---
 
@@ -131,9 +129,11 @@ DEEPSEEK_API_KEY=sk-...
 TAVILY_API_KEY=tvly-...
 API_SECRET_TOKEN=vlastny-tajny-token
 VITE_API_SECRET_TOKEN=vlastny-tajny-token
+HISTORY_PASSWORD_HASH=$2a$14$...
 ```
 
-> `API_SECRET_TOKEN` a `VITE_API_SECRET_TOKEN` musia byť rovnaké. Chránia `/api/messages` aj `/history`.
+> `API_SECRET_TOKEN` a `VITE_API_SECRET_TOKEN` musia byť rovnaké. Chránia `/api/messages`.
+> `HISTORY_PASSWORD_HASH` je bcrypt hash hesla pre `/history` — vygeneruj cez `docker exec caddy caddy hash-password --plaintext 'tvoje-heslo'`.
 
 ### 2. Spusti
 
@@ -141,16 +141,13 @@ VITE_API_SECRET_TOKEN=vlastny-tajny-token
 docker compose up -d --build
 ```
 
-Caddy-docker-proxy zaregistruje kontajner a app je dostupná na `https://potulky.kozliatko.sk`.
+Caddy-docker-proxy zaregistruje kontajner a app je dostupná na doméne nastavenej v `docker-compose.yml` (label `caddy:`).
 
 ---
 
 ## História vyhľadávaní
 
-```bash
-# V prehliadači (vyžaduje x-api-token)
-curl -H "x-api-token: tvoj-token" https://potulky.kozliatko.sk/history
-```
+`/history` je chránený priamo na úrovni Caddy (`basic_auth`, path-scoped len na `/history*`) — v prehliadači sa zobrazí natívny prihlasovací dialóg, prihlásiš sa menom a heslom nastaveným cez `HISTORY_PASSWORD_HASH`.
 
 Zobrazuje: čas, IP, lokalita, počet vyhľadávaní, tokeny, trvanie, status (ok/error).
 
@@ -247,19 +244,24 @@ potulky/
 **GPS tlačidlo nefunguje**
 → Prehliadač vyžaduje HTTPS alebo localhost. Na HTTP doméne geolokácia nie je dostupná.
 
-**`401 Neoprávnený prístup`**
+**`401 Neoprávnený prístup`** (`/api/messages`)
 → Skontroluj `API_SECRET_TOKEN` v `.env` a `VITE_API_SECRET_TOKEN` (musí byť rovnaký, rebuild potrebný).
+
+**`/history` pýta prihlásenie, ktoré neuznáva heslo**
+→ Over `HISTORY_PASSWORD_HASH` v `.env` — musí byť platný bcrypt hash z `caddy hash-password`, nie plaintext heslo.
 
 ---
 
 ## Changelog
 
+Pozri [CHANGELOG.md](CHANGELOG.md) pre kompletnú históriu zmien.
+
 ### v2.0.0
-- Premenovaný projekt: BikeAgent → Potulky (potulky.kozliatko.sk)
+- Premenovaný projekt: BikeAgent → Potulky
 - Nový mód: HikeAgent — turistika s podporou kočíka, detí a seniorov
 - GPS tlačidlo s Nominatim reverse geocodingom (OSM)
 - SQLite logovanie vyhľadávaní (db.js)
-- /history endpoint (chránený tokenom)
+- /history endpoint — chránený Caddy basic_auth (path-scoped)
 - Limit vyhľadávaní vynútený v kóde (max 10 Tavily volaní)
 - Caddy timeout: 120 s → 300 s
 - Zdroje vo výstupe klikateľné
