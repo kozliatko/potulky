@@ -1,4 +1,5 @@
 services:
+
   app:
     build:
       context: .
@@ -10,5 +11,29 @@ services:
     env_file: .env
     environment:
       - NODE_ENV=production
-    ports:
-      - "8080:3001"
+    volumes:
+      - app_data:/app/data
+    networks:
+      - default
+      - caddy
+    labels:
+      caddy: potulky.kozliatko.sk
+      caddy.reverse_proxy: "{{upstreams 3001}}"
+      caddy.encode: gzip zstd
+      caddy.reverse_proxy.transport: http
+      caddy.reverse_proxy.transport.read_timeout: 300s
+      caddy.log: ""
+      caddy.log.output: stderr
+      caddy.log.format: json
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  caddy:
+    external: true
+
+volumes:
+  app_data:

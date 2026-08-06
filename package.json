@@ -1,0 +1,11 @@
+{
+  "name": "cyclo-agent",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/smoke.test.js",
+    "test:unit": "cd backend && npm test",
+    "test:all": "npm run test:unit && npm test"
+  }
+}

@@ -11,16 +11,28 @@ ENV VITE_API_SECRET_TOKEN=$VITE_API_SECRET_TOKEN
 
 RUN npm run build
 
-# ── Stage 2: Node.js server + frontend bundle ─────────────────────────────────
-FROM node:20-alpine
+# ── Stage 2: Backend deps (kompilácia better-sqlite3) ─────────────────────────
+FROM node:20-alpine AS backend-builder
 
+RUN apk add --no-cache python3 make g++
 WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
+
+# ── Stage 3: Finálny image ────────────────────────────────────────────────────
+FROM node:20-alpine
+
+WORKDIR /app
+COPY --from=backend-builder /app/node_modules ./node_modules
 COPY backend/ .
 
 # Frontend build do public/
 COPY --from=frontend-builder /frontend/dist ./public
+
+# Perzistentný adresár pre SQLite DB
+RUN mkdir -p /app/data && chown node:node /app/data
+
+USER node
 
 EXPOSE 3001
 

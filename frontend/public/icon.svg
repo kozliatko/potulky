@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="#059669"/>
+
+  <!-- Sun -->
+  <circle cx="378" cy="128" r="62" fill="#fde68a"/>
+
+  <!-- Back mountain -->
+  <polygon points="330,185 464,400 196,400" fill="rgba(255,255,255,0.28)"/>
+
+  <!-- Front mountain -->
+  <polygon points="136,148 348,400 -76,400" fill="#ffffff"/>
+
+  <!-- Trail on mountain -->
+  <path d="M 196 400 Q 232 348 204 308 Q 176 268 208 228 Q 238 193 222 158"
+        fill="none" stroke="#047857" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
