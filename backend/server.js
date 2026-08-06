@@ -10,6 +10,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+if (process.env.NODE_ENV === "production" && !process.env.API_SECRET_TOKEN) {
+  throw new Error("API_SECRET_TOKEN musí byť nastavený v produkcii.");
+}
+
 app.set("trust proxy", 1);
 
 // ─── DeepSeek klient (OpenAI-compatible API) ─────────────────────────────────
@@ -194,7 +198,7 @@ app.post("/api/messages", authMiddleware, async (req, res) => {
   }
 });
 
-app.get("/history", authMiddleware, (req, res) => {
+app.get("/history", (req, res) => {
   const rows  = getHistory();
   const stats = getStats();
 
