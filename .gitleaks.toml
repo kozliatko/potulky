@@ -1,0 +1,16 @@
+title = "Potulky — gitleaks konfigurácia"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholdery a testovacie fixtures, nie sú to reálne secrets"
+paths = [
+  '''\.env\.example$''',
+  '''backend/server\.test\.js$''',
+]
+regexes = [
+  '''tvoj-token''',
+  '''zmen-toto-na-vlastny-tajny-token''',
+  '''vlastny-tajny-token''',
+]
