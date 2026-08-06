@@ -1,5 +1,14 @@
 # Potulky
 
+[![Security](https://github.com/kozliatko/potulky/actions/workflows/security.yml/badge.svg)](https://github.com/kozliatko/potulky/actions/workflows/security.yml)
+![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
+![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)
+![Claude](https://img.shields.io/badge/Claude-AI-D97757?logo=anthropic&logoColor=white)
+![PWA](https://img.shields.io/badge/PWA-5A0FC8?logo=pwa&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 AI agent pre hľadanie rodinných cyklociest a turistických trás. Podľa zadanej lokality (alebo GPS polohy) a parametrov vyhľadá vhodné trasy, zobrazí ich na mape a pridá predpoveď počasia.
 Hobby projekt pre vlastnú potrebu robený po večeroch počas venčenia psa.
 
