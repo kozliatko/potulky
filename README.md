@@ -77,11 +77,13 @@ Funguje v PWA aj prehliadači. Vyžaduje povolenie od používateľa.
 **`backend/server.js`**
 
 ```
-POST /api/messages
-  └── authMiddleware        (x-api-token hlavička, ak API_SECRET_TOKEN nastavený)
+POST /api/messages  { mode: "bike"|"hike", profile: {...}, location: "..." }
   └── rateLimiter           (globálny: 120 req/min; API: 20 req/min na IP)
+  └── buildPrompt()         (server si sám skladá system prompt aj user message —
+                              klient neposiela system/messages/max_tokens)
   └── runAgent()
         └── agentic loop: DeepSeek V3 + Tavily Search (max 10 vyhľadávaní, max 25 iterácií)
+                            max_tokens fixné na 8000, nedá sa prepísať klientom
   └── insertSearch()        (SQLite logging)
   └── { content: [{ type: "text", text }], usage }
 
@@ -136,13 +138,12 @@ nano .env
 ```env
 DEEPSEEK_API_KEY=sk-...
 TAVILY_API_KEY=tvly-...
-API_SECRET_TOKEN=vlastny-tajny-token
-VITE_API_SECRET_TOKEN=vlastny-tajny-token
 HISTORY_PASSWORD_HASH=$2a$14$...
 ```
 
-> `API_SECRET_TOKEN` a `VITE_API_SECRET_TOKEN` musia byť rovnaké. Chránia `/api/messages`.
 > `HISTORY_PASSWORD_HASH` je bcrypt hash hesla pre `/history` — vygeneruj cez `docker exec caddy caddy hash-password --plaintext 'tvoje-heslo'`.
+>
+> `/api/messages` nie je chránené tokenom — appka je verejná služba. Ochrana proti zneužitiu ide cez rate limiting a server-side limity (server si sám skladá system prompt, `max_tokens` je fixný, klient nemôže poslať vlastné inštrukcie).
 
 ### 2. Spusti
 
@@ -252,9 +253,6 @@ potulky/
 
 **GPS tlačidlo nefunguje**
 → Prehliadač vyžaduje HTTPS alebo localhost. Na HTTP doméne geolokácia nie je dostupná.
-
-**`401 Neoprávnený prístup`** (`/api/messages`)
-→ Skontroluj `API_SECRET_TOKEN` v `.env` a `VITE_API_SECRET_TOKEN` (musí byť rovnaký, rebuild potrebný).
 
 **`/history` pýta prihlásenie, ktoré neuznáva heslo**
 → Over `HISTORY_PASSWORD_HASH` v `.env` — musí byť platný bcrypt hash z `caddy hash-password`, nie plaintext heslo.
