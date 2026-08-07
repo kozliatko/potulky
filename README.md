@@ -81,6 +81,8 @@ POST /api/messages  { mode: "bike"|"hike", profile: {...}, location: "..." }
   └── rateLimiter           (globálny: 120 req/min; API: 20 req/min na IP)
   └── buildPrompt()         (server si sám skladá system prompt aj user message —
                               klient neposiela system/messages/max_tokens)
+  └── denná kvóta           (MAX_REQUESTS_PER_IP_PER_DAY=15, MAX_GLOBAL_REQUESTS_PER_DAY=300 —
+                              429/503 pri prekročení, konfigurovateľné cez .env)
   └── runAgent()
         └── agentic loop: DeepSeek V3 + Tavily Search (max 10 vyhľadávaní, max 25 iterácií)
                             max_tokens fixné na 8000, nedá sa prepísať klientom
