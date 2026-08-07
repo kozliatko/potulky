@@ -136,7 +136,7 @@ GET *                     → index.html  (SPA fallback)
 | `/api/*` | NetworkOnly | AI vyhľadávanie vždy cez sieť |
 | `api.open-meteo.com` | NetworkFirst | Počasie, cache 1 hod |
 | `*.tile.openstreetmap.org` | CacheFirst | Mapové dlaždice, cache 7 dní |
-| Statické assets | Precache | JS, CSS, HTML, PNG, SVG |
+| Statické assets | Precache | JS, CSS, HTML, PNG, SVG (okrem `history.js` — patrí len `/history` admin stránke, bežná appka ho nepoužije) |
 
 **Aktualizácie:** `registerType: "prompt"` — nová verzia sa nenasadí potichu (mohla by zmazať rozpísaný vstup), appka zobrazí banner "🔄 K dispozícii je nová verzia Potuliek" s tlačidlom **Obnoviť teraz**. Kontrola beží hodinovo a pri návrate appky z pozadia (`visibilitychange`); ak si banner nikto nevšimne, appka sa po 60 s obnoví sama.
 
