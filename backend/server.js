@@ -4,7 +4,7 @@ import rateLimit from "express-rate-limit";
 import OpenAI from "openai";
 import path from "path";
 import { fileURLToPath } from "url";
-import { insertSearch, getHistory, getStats, requestsTodayByIp, requestsToday } from "./db.js";
+import { insertSearch, getHistory, getStats, requestsTodayByIp, requestsToday, pruneOldRecords } from "./db.js";
 import { buildPrompt } from "./prompts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -331,6 +331,10 @@ app.use((err, req, res, next) => {
 
 // ─── Spustenie ──────────────────────────────────────────────────────────────
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const pruned = pruneOldRecords();
+  if (pruned > 0) console.log(`🧹 Vymazaných ${pruned} starých záznamov histórie.`);
+  setInterval(() => pruneOldRecords(), 24 * 60 * 60 * 1000);
+
   app.listen(PORT, () => {
     console.log(`✅ BikeAgent (DeepSeek) beží na porte ${PORT}`);
     console.log(`   NODE_ENV: ${process.env.NODE_ENV || "development"}`);

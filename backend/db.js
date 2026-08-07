@@ -67,3 +67,16 @@ const countGlobalToday = db.prepare(`
 `);
 
 export const requestsToday = () => countGlobalToday.get().count;
+
+// ─── Retencia dát ─────────────────────────────────────────────────────────────
+// IP adresy a lokality sú osobné/citlivé údaje — nezachovávame ich navždy.
+
+const RETENTION_DAYS = Number(process.env.HISTORY_RETENTION_DAYS) || 90;
+
+const pruneOld = db.prepare(`
+  DELETE FROM searches WHERE created_at < datetime('now', '-' || ? || ' days')
+`);
+
+export const pruneOldRecords = () => pruneOld.run(RETENTION_DAYS).changes;
+
+export { db };
