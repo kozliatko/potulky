@@ -58,11 +58,13 @@ cyclo-agent kontajner  (port 3001, interný)
 
 ## Módy aplikácie
 
+Oba módy zdieľajú rovnaké **primárne zdroje** (`backend/prompts.js`) — všeobecné mapové platformy vhodné pre cyklo aj turistické trasy: `mapy.cz, komoot.com, openstreetmap`. Ku každému módu sa pridávajú doménovo-špecifické sekundárne zdroje.
+
 ### Cyklistika (BikeAgent)
 
 - Profil skupiny: `{ hasEbike, hasChildren, hasTrailer }`
 - Hľadá asfaltové a spevnené trasy, bezpečné pre e-bike rodinu
-- Zdroje: `mapy.cz, cycling.sk, bikemap.net, alltrails.com, komoot.com, hiking.sk, openstreetmap`
+- Zdroje: primárne + `cycling.sk, bikemap.net, alltrails.com`
 - Linky na trasy: Mapy.cz cyklomode, Komoot
 
 ### Turistika (HikeAgent)
@@ -70,7 +72,7 @@ cyclo-agent kontajner  (port 3001, interný)
 - Profil skupiny: `{ hasChildren, hasStroller, hasSeniors }`
 - Pri `hasStroller`: spevnený povrch, šírka min. 1,5 m, sklon max. 8 %, žiadne schody
 - JSON schéma navyše: `strollerFriendly`, `walkingTime`, `terrain`, `footwearTip`
-- Zdroje: `hiking.dennikn.sk, hiking.sk, mapy.cz, turistika.sk, komoot.com, openstreetmap`
+- Zdroje: primárne + `hiking.sk, hiking.dennikn.sk, turistika.sk`
 - Linky na trasy: Mapy.cz turistický režim, Komoot hiking
 
 ---

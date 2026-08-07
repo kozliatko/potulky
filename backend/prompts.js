@@ -1,6 +1,20 @@
+// ─── Zdieľané primárne zdroje ──────────────────────────────────────────────
+// Všeobecné mapové platformy použiteľné pre cyklo aj turistické trasy —
+// zdieľané medzi oboma agentmi, aby sa nezaviedli navzájom nekonzistentné
+// zoznamy pri budúcich úpravách. Doménovo-špecifické zdroje sa pridávajú
+// osobitne pre každý mód.
+
+const PRIMARY_SOURCES = ["mapy.cz", "komoot.com", "openstreetmap"];
+
+function formatSources(extraSources, mapyMode) {
+  const primary = PRIMARY_SOURCES.map(s => (s === "mapy.cz" && mapyMode ? `mapy.cz (${mapyMode})` : s));
+  return [...primary, ...extraSources].join(", ");
+}
+
 // ─── Bike ──────────────────────────────────────────────────────────────────
 
 export const BIKE_PROFILE_DEFAULTS = { hasEbike: true, hasChildren: true, hasTrailer: true };
+const BIKE_EXTRA_SOURCES = ["cycling.sk", "bikemap.net", "alltrails.com"];
 
 function bikeGroupDesc({ hasEbike, hasChildren, hasTrailer }) {
   return !hasChildren
@@ -35,7 +49,7 @@ LIMIT VYHĽADÁVANÍ: Použi MAXIMÁLNE 10 web_search volaní celkovo. Buď efek
 
 1. Vyhľadaj cyklotrasy v zadanej lokalite pomocou web_search nástroja (2-3 vyhľadávania)
 2. Hľadaj VÝLUČNE asfaltové alebo spevnené povrchy (nie terénne trail trasy)
-3. Over trasy z dostupných zdrojov (mapy.cz, cycling.sk, bikemap.net, alltrails.com, komoot.com, hiking.sk, openstreetmap — max 3-4 ďalšie vyhľadávania)
+3. Over trasy z dostupných zdrojov (${formatSources(BIKE_EXTRA_SOURCES, "cyklo mód")} — max 3-4 ďalšie vyhľadávania)
 4. KRITICKY zhodnoť každú trasu:
    - Bezpečnosť (intenzita premávky, cyklopruhy, oddelenie od áut)${hasTrailer ? "\n   - Vhodnosť pre prívesný vozík (šírka min. 1,5m, povrch, prechodnosť)" : ""}${hasChildren ? "\n   - Náročnosť pre deti na bicykli (prevýšenie, sklon)" : ""}
    - Povrch (asfalt = výborný, spevnená cesta = dobrý, makadám = akceptovateľný)
@@ -87,6 +101,8 @@ export function buildBikeUserMessage(profile, location) {
 
 export const HIKE_PROFILE_DEFAULTS = { hasChildren: true, hasStroller: true, hasSeniors: false };
 
+const HIKE_EXTRA_SOURCES = ["hiking.sk", "hiking.dennikn.sk", "turistika.sk"];
+
 function hikeGroupDesc({ hasChildren, hasStroller, hasSeniors }) {
   if (hasStroller) return hasChildren ? "rodinu s kočíkom" : "turistov s kočíkom";
   if (hasChildren && hasSeniors) return "rodinu s deťmi a seniormi";
@@ -118,7 +134,7 @@ LIMIT VYHĽADÁVANÍ: Použi MAXIMÁLNE 10 web_search volaní celkovo. Buď efek
 
 1. Vyhľadaj turistické chodníky, náučné trasy a vycházkové okruhy v zadanej lokalite (2–3 vyhľadávania)
 2. Hľadaj trasy vhodné pre skupinu — prioritou sú spevnené chodníky, náučné okruhy, parky, prírodné rezervácie${hasStroller ? "\n3. PRE KOČÍK: overuj výlučne povrch (asfalt/spevnená cesta), šírku (min. 1,5 m) a sklon (max. 8 %)" : ""}
-${hasStroller ? "4" : "3"}. Over trasy na hiking.sk, hiking.dennikn.sk, mapy.cz (turistický mód), turistika.sk, komoot.com a openstreetmap (max 3–4 vyhľadávania)
+${hasStroller ? "4" : "3"}. Over trasy z dostupných zdrojov (${formatSources(HIKE_EXTRA_SOURCES, "turistický mód")} — max 3–4 ďalšie vyhľadávania)
 ${hasStroller ? "5" : "4"}. KRITICKY zhodnoť každú trasu:
    - Typ povrchu a prechodnosť${hasStroller ? " pre kočík (spevnený = výborný, štrk = podmienečne, lesný chodník = nevhodný)" : ""}
    - Náročnosť: dĺžka, prevýšenie, čas chôdze${hasChildren ? "\n   - Vhodnosť a bezpečnosť pre deti" : ""}${hasSeniors ? "\n   - Dostupnosť lavičiek, oddychových miest, toaliet" : ""}
