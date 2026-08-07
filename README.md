@@ -285,7 +285,3 @@ Pozri [CHANGELOG.md](CHANGELOG.md) pre kompletnú históriu zmien.
 - Základná verzia: vyhľadávanie cyklotrás, Leaflet mapa, predpoveď počasia
 - Profil skupiny, história vyhľadávaní, filtrovanie trás
 
-
-
-
-
