@@ -16,7 +16,7 @@ services:
       - caddy
     labels:
       caddy: potulky.kozliatko.sk
-      caddy.@history_path: path /history*
+      caddy.@history_path: path /history
       caddy.basic_auth: "@history_path"
       caddy.basic_auth.admin: "${HISTORY_PASSWORD_HASH}"
       caddy.reverse_proxy: "{{upstreams 3001}}"
