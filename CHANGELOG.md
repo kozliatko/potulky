@@ -9,7 +9,6 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Removed
 - `@anthropic-ai/sdk` z `backend/package.json` — nepoužívaná závislosť z prvého commitu (éra Claude Haiku), projekt beží na DeepSeek V3 cez `openai` SDK už od v1.0.0
-- 3 mŕtve allowlist regexy v `.gitleaks.toml` (`tvoj-token`, `zmen-toto-na-vlastny-tajny-token`, `vlastny-tajny-token`) — placeholder starého `API_SECRET_TOKEN`, ktorý bol vo Fáze 1 úplne odstránený
 
 ### Added
 - Globálny rate limiter (120 req/min) pred API-špecifickým (20 req/min)
