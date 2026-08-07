@@ -3,13 +3,15 @@
 [![Build & Test](https://github.com/kozliatko/potulky/actions/workflows/build.yml/badge.svg)](https://github.com/kozliatko/potulky/actions/workflows/build.yml)
 [![Security](https://github.com/kozliatko/potulky/actions/workflows/security.yml/badge.svg)](https://github.com/kozliatko/potulky/actions/workflows/security.yml)
 [![codecov](https://codecov.io/gh/kozliatko/potulky/branch/main/graph/badge.svg?token=vASvrvjFQs)](https://codecov.io/gh/kozliatko/potulky)
+[![Snyk](https://snyk.io/test/github/kozliatko/potulky/badge.svg)](https://snyk.io/test/github/kozliatko/potulky)
 ![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)
 ![Claude](https://img.shields.io/badge/Claude-AI-D97757?logo=anthropic&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-5A0FC8?logo=pwa&logoColor=white)
-![License](https://img.shields.io/badge/license-MIT-green)
+![Last commit](https://img.shields.io/github/last-commit/kozliatko/potulky)
+![License](https://img.shields.io/github/license/kozliatko/potulky)
 
 AI agent pre hľadanie rodinných cyklociest a turistických trás. Podľa zadanej lokality (alebo GPS polohy) a parametrov vyhľadá vhodné trasy, zobrazí ich na mape a pridá predpoveď počasia.
 Hobby projekt pre vlastnú potrebu robený po večeroch počas venčenia psa.
@@ -323,4 +325,3 @@ Pozri [CHANGELOG.md](CHANGELOG.md) pre kompletnú históriu zmien.
 ### v1.0.0
 - Základná verzia: vyhľadávanie cyklotrás, Leaflet mapa, predpoveď počasia
 - Profil skupiny, história vyhľadávaní, filtrovanie trás
-
