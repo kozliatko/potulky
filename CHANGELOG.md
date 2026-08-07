@@ -7,6 +7,13 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **PWA update flow bol prakticky mŕtvy kód** — `registerType: "autoUpdate"` v `vite.config.js` núti vite-plugin-pwa natvrdo nastaviť `workbox.skipWaiting`/`clientsClaim` na `true` bez ohľadu na konfiguráciu; v tomto režime sa `onNeedRefresh` callback (zavedený v predchádzajúcej PWA oprave) **nikdy nezavolá** — knižnica namiesto neho tichým reloadom reaguje priamo na event `activated`, ktorý sa ale bez pravidelnej kontroly aktualizácie (žiadna v appke nebola) prirodzene nespustí pri SPA bez plnej navigácie. Výsledok: klienti vedeli ostať zaseknutí na starej verzii donekonečna (napr. rozbitá mapa po serverovej zmene API kontraktu)
+
+### Added
+- **Viditeľný PWA update banner** — `registerType: "prompt"` + odstránené `skipWaiting`/`clientsClaim`, takže nová verzia korektne čaká vo "waiting" stave a `onNeedRefresh` sa spoľahlivo spustí; namiesto tichého reloadu (ktorý mohol zmazať rozpísaný vstup) appka zobrazí banner "Obnoviť teraz" s poistkou automatického reloadu po 60 s, ak si ho nikto nevšimne
+- Pravidelná kontrola aktualizácie (`registration.update()` každú hodinu + pri návrate appky z pozadia cez `visibilitychange`) — predtým sa kontrola spoliehala len na zriedkavé plné navigácie
+
 ---
 
 ## [2.1.0] — 2026-08-07

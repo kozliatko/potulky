@@ -6,7 +6,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt" (nie "autoUpdate"): pri autoUpdate vite-plugin-pwa natvrdo
+      // vynúti workbox.skipWaiting/clientsClaim = true bez ohľadu na nižšie
+      // nastavenie, čím rozbije onNeedRefresh banner flow (pozri komentár
+      // pri workbox nižšie).
+      registerType: "prompt",
       injectRegister: "auto",
       selfDestroying: false,
       includeAssets: ["favicon.ico", "icon.svg", "apple-touch-icon-180x180.png"],
@@ -31,8 +35,11 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         navigateFallbackDenylist: [/^\/history$/],
-        skipWaiting: true,
-        clientsClaim: true,
+        // skipWaiting/clientsClaim: true tu paradoxne rozbíjali update flow —
+        // nový SW sa aktivoval skôr, než ho onNeedRefresh stihol zachytiť vo
+        // "waiting" stave, takže banner/reload sa nikdy nespustil (klient
+        // ostal ticho na starej verzii). Bez nich nový SW počká na explicitný
+        // SKIP_WAITING signál, ktorý posiela updateSW(true) v main.jsx.
         runtimeCaching: [
           {
             urlPattern: /^\/api\//,
