@@ -172,6 +172,18 @@ describe("GET /history", () => {
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toMatch(/text\/html/);
   });
+
+  it("escapuje XSS payload v location aj ip (nie je vykonateľný HTML)", async () => {
+    const payload = "<script>alert(1)</script>";
+    await request(app)
+      .post("/api/messages")
+      .set("X-Forwarded-For", payload)
+      .send({ mode: "bike", location: payload });
+
+    const res = await request(app).get("/history");
+    expect(res.text).not.toContain("<script>alert(1)</script>");
+    expect(res.text).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+  });
 });
 
 describe("Neznáme API endpointy", () => {

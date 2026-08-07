@@ -200,18 +200,21 @@ app.get("/history", (req, res) => {
   };
   const ms = v => v != null ? `${v} ms` : "—";
   const num = v => v != null ? v.toLocaleString("sk-SK") : "0";
+  const esc = v => String(v ?? "").replace(/[&<>"']/g, c => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
 
   const rows_html = rows.map(r => `
     <tr class="${r.status === 'error' ? 'err' : ''}">
       <td>${r.id}</td>
       <td>${fmt(r.created_at)}</td>
-      <td>${r.ip || "—"}</td>
-      <td class="loc">${r.location ? r.location.replace(/</g, "&lt;") : "—"}</td>
+      <td>${r.ip ? esc(r.ip) : "—"}</td>
+      <td class="loc">${r.location ? esc(r.location) : "—"}</td>
       <td>${r.search_count ?? 0}</td>
       <td>${num(r.input_tokens)}</td>
       <td>${num(r.output_tokens)}</td>
       <td>${ms(r.duration_ms)}</td>
-      <td><span class="badge ${r.status}">${r.status}</span></td>
+      <td><span class="badge ${esc(r.status)}">${esc(r.status)}</span></td>
     </tr>`).join("");
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
