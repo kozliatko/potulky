@@ -34,6 +34,12 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // history.js patrí len k /history admin stránke (basic_auth), nie
+        // k samotnej appke — bežní návštevníci ho nikdy nepotrebujú. Bez
+        // tohto ho SW precachoval každému, čo bolo zbytočné dáta navyše
+        // a zároveň priama príčina neželaného basic_auth popupu (SW si ho
+        // sťahoval na pozadí a narazil na chránenú cestu).
+        globIgnores: ["history.js"],
         navigateFallbackDenylist: [/^\/history$/],
         // skipWaiting/clientsClaim: true tu paradoxne rozbíjali update flow —
         // nový SW sa aktivoval skôr, než ho onNeedRefresh stihol zachytiť vo
