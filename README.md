@@ -1,5 +1,6 @@
 # Potulky
 
+[![Build & Test](https://github.com/kozliatko/potulky/actions/workflows/build.yml/badge.svg)](https://github.com/kozliatko/potulky/actions/workflows/build.yml)
 [![Security](https://github.com/kozliatko/potulky/actions/workflows/security.yml/badge.svg)](https://github.com/kozliatko/potulky/actions/workflows/security.yml)
 ![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
