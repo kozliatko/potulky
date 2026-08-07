@@ -288,3 +288,4 @@ Pozri [CHANGELOG.md](CHANGELOG.md) pre kompletnú históriu zmien.
 
 
 
+
