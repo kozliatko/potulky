@@ -1,306 +1,215 @@
 # Bezpečnostná analýza projektu „potulky"
 
-**Dátum:** 2026-08-07
+**Pôvodný dátum:** 2026-08-07 · **Aktualizované:** 2026-08-07 (po pull `main`, commit `c2cf05c`)
 **Predpoklad:** projekt je verejná služba (**public**, bez prihlasovania používateľov).
-**Rozsah:** backend (Express/Node), frontend (React/Vite), infraštruktúra (Docker, Caddy, Nginx), CI/CD.
-**Commit použitý pre analýzu:** current `main` (@ `git log` HEAD).
+**Rozsah:** backend (Express/Node), frontend (React/Vite), infraštruktúra (Docker, Caddy), CI/CD.
 
-> Skratky: **K** = kritické, **V** = vysoké, **S** = stredné, **N** = nízke.
-
----
-
-## 0. Zhrnutie (Executive summary)
-
-Projekt prešiel základnými dobrými návykmi: prepared statements v SQLite (SQL-injection bezpečné),
-bezpečnostné HTTP hlavičky na Nginx, limit veľkosti tela (1 MB), rate limiting, Docker beží ako
-non-root používateľ, žiadne `dangerouslySetInnerHTML` na fronte (React automaticky escapuje),
-slovenská podpora. CI má job na gitleaks + npm audit.
-
-**Zásadné problémy vo vzťahu k „verejná služba bez prihlasovania":**
-
-1. **Falošný autentifikačný token (K–V).** Backend v produkcii *vynucuje* `API_SECRET_TOKEN`, ale ten
-   je zapálený do verejného frontend bundlu cez `VITE_API_SECRET_TOKEN`. Keďže služba je verejná,
-   token si prečíta každý návštevník priamo z JS → „auth" je úplne bezcenný a dáva falošný pocit
-   bezpečia. Navyše je to v rozpore s požiadavkou „public bez prihlasovania".
-2. **Klient ovláda systém prompt, cele messages a max_tokens (K).** `POST /api/messages` berie
-   `{ system, messages, max_tokens }` priamo z tela požiadavky. Verejný útočník môže:
-   - prepísať/obísť systémový prompt (prompt injection),
-   - nechať agenta robiť ľubovoľné Tavily vyhľadávania (zneužitie platenej API),
-   - nastaviť obrovské `max_tokens` (ekonomická/DoS zneužitie).
-3. **Žiadny globálny rozpočet / denná kvóta (V).** Jediné limity sú „za minútu" (20/min API, 120/min
-   globálne) a dajú sa obísť menením IP / proxiami. Neexistuje denná kvóta na IP ani globálny strop
-   nákladov → verejný útočník môže vypáliť rozpočet vlastníka API.
-4. **XSS v `/history` (S).** Ukladané polia (IP, status, user_agent) sú vložené do HTML bez escapovania;
-   `location` escapuje iba `<`. Ochrana je „len cez Caddy basic_auth".
-5. **/history nemá vlastnú autentifikáciu v aplikácii (S).** Spolieha sa výhradne na basic_auth v Caddy
-   (path-scoped). Pri priamom prístupe na backend port (napr. docker-compose.dev) je otvorené a uniká
-   IP adresy návštevníkov.
-6. **Chýba CSP (S).** Nginx má X-Frame-Options, X-Content-Type-Options, Referrer-Policy, ale žiadnu
-   Content-Security-Policy.
-7. **Únik detailov chýb (S).** `res.status(500).json({ error: err.message })` posiela klientovi
-   interné texty chýb (môžu obsahovať cestu sys, meno služby, resp. Tavily hlášky).
-
-Ostatné nálezy (CORS, trust proxy, hardening Docker, pinning verzií, súkromie/GDPR) sú v detaile nižšie.
+> Skratky: **K** = kritické · **V** = vysoké · **S** = stredné · **N** = nízke.
+> Stav nálezu: ✅ **vyriešené** · 🟡 **čiastočne** · ⚠️ **otvorené/odporúča sa riešiť**
 
 ---
 
-## 1. Kritické / Vysoké (riešiť predtým, než to pôjde na verejný internet)
+## 0. Stav po aktualizácii kódu (Executive summary)
 
-### 1.1 [K] Klient kontroluje systém prompt a max_tokens → prompt injection a zneužitie nákladov
-**Súbor:** `backend/server.js` (okolo riadku 170)
-```js
-const { system, messages, max_tokens } = req.body;
-if (!messages || !Array.isArray(messages)) { ... }
-const { text, usage } = await runAgent({ system, messages, max_tokens });
-```
-**Problém:** `system`, `messages` aj `max_tokens` sú čisto od klienta. Verejný útočník môže:
-- poslať systémový prompt, ktorý terču/zmení správanie agenta (prelomenie ohraničenia),
-- poslať vlastnú históriu, ktorá agenta vmanipuluje do nekonečného reťazca vyhľadávaní
-  (`tavilySearch`) → **platí sa Tavily aj DeepSeek API**,
-- dať `max_tokens` na maximum → drahé odpovede.
+Projekt prešiel zásadnou aktualizáciou, ktorá implementovala **väčšinu odporúčaní** z tejto analýzy.
+Zhrnutie stavu klúčových nálezov:
 
-**Odporúčanie (verejná služba):**
-1. **Nikdy nepreberať `system` ani `max_tokens` od klienta.** Backend si zostaví systémový prompt
-   sám (fixné inštrukcie + ciele bezpečnosti). Vzťahovať sa na pevne definovaný bezpečnostný rámec.
-2. **Stropovať `max_tokens` na serveri** (napr. `Math.min(max_tokens ?? 8000, 8000)`) a vždy ho
-   vynútiť — nikdy nie priamo z tela.
-3. **Meníť `messages`:** očistiť klientské vstupy, prijať iba `role: "user" | "assistant"` sanity-check,
-   rezať dĺžku každej správy a celého pola, obmedziť počet správ.
-4. **Zaviesť serverové stropy runAgent:** už existuje limit 10 vyhľadávaní a max 25 krokov — znížiť
-   ich a nastaviť tvrdý strop celkových tokenov + celkového času.
+| # | Nález | Závažnosť | Stav |
+|---|-------|-----------|------|
+| 1.1 | Klient kontroluje systém prompt + max_tokens | K | ✅ Vyriešené (`backend/prompts.js`, fixný `MAX_TOKENS`) |
+| 1.2 | Falošná autentifikácia cez verejný token | K | ✅ Vyriešené (token úplne odstránený) |
+| 1.3 | Slabý rate limiting / bez cenového rozpočtu | V | ✅ Vyriešené (denná kvóta na IP + globálny denný strop) |
+| 1.4 | XSS v `/history` – nedostatočné escapovanie | V | ✅ Vyriešené (kompletná `esc()` na všetkých poliach) |
+| 1.5 | `trust proxy` + expozícia portu 3001 | V | 🟡 Čiastočne (port už nie je exponovaný; `trust proxy` zostáva) |
+| 1.6 | `/history` bez auth v aplikácii | V | 🟡 Čiastočne (ochrana cez Caddy; bez vlastnej auth v aplikácii) |
+| 2.1 | Chýbajúca CSP | S | ✅ Vyriešené (plná CSP v Caddy labels) |
+| 2.2 | Únik interných chýb (500) | S | ✅ Vyriešené (generická chyba) |
+| 2.3 | Súkromie IP / retention | S | 🟡 Čiastočne (retention je; anonymizácia IP nie) |
+| 2.4 | CORS `*` | S | ⚠️ Otvorené (`origin: *` default zostáva) |
+| 2.5 | Hardening Docker / pinning | S | ✅ Vyriešené (`npm ci`, pinnovaný Node, non-root, HEALTHCHECK) |
+| 2.6 | CI bez build/test | S | ✅ Vyriešené (pridaný `build.yml`) |
+| 2.7 | Rate limit na statiku/health | S | 🟡 Čiastočne (globálny limiter stále pokrýva `/`) |
 
-### 1.2 [K] Falošná autentifikácia cez verejný token
-**Súbor:** `backend/server.js` (riadky ~145–153, ~13–15), `frontend/src/components/BikeAgent.jsx:174–175`,
-`HikeAgent.jsx:178–179`, `frontend/Dockerfile` (ARG/ENV `VITE_API_SECRET_TOKEN`), `docker-compose.yml`.
-
-**Problém:** Token `API_SECRET_TOKEN` sa predáva do bundlu cez `VITE_API_SECRET_TOKEN`. Všetci návštevníci
-ho majú v JS. `authMiddleware` potom vráti 401 každému, kto nemá token — čo je pre legitímneho používateľa
-blokujúce a pre útočníka triviálne obídateľné. V production navyše `if (NODE_ENV==="production" &&
-!process.env.API_SECRET_TOKEN) throw` **núti** nastaviť token aj keď to má byť verejná služba.
-
-**Odporúčanie (verejná služba bez prihlasovania):**
-- **Odstrániť `C`1 úplne.** Pre verejnú službu je to mŕtva a zavádzajúca vrstva.
-- Zachovať resp. presunúť ochranu do vrstiev, ktoré naozaj fungujú bez prihlasovania:
-  - **serverové zostavenie promptov** (bod 1.1),
-  - **prísne rate limiting + denné kvóty** (bod 1.3),
-  - **globálny budget nákladov** (bod 1.3),
-  - Web Application Firewall / edge ochranu (Caddy + fail2ban) pri public nasadení.
-- Ak by ste naozaj chceli obmedziť prístup k endpointu, použite skutočný mechanizmus (session, CAPTCHA
-  / Turnstile) — nie verejne známy token.
-- Odstrániť produkčnú podmienku `throw`, prípadne ju nahradiť zmysluplnejšou kontrolou (napr.
-  vyžadovať `DEEPSEEK_API_KEY` a `TAVILY_API_KEY`).
-
-### 1.3 [V] Slabý rate limiting a neexistujúci cenový rozpočet pre verejné API
-**Súbor:** `backend/server.js` (limitery okolo r. 127–143)
-```js
-const limiter = rateLimit({ windowMs: 60*1000, max: 120, ... });   // globálne "/"
-app.use(limiter);
-const apiLimiter = rateLimit({ windowMs: 60*1000, max: 20 });      // "/api/"
-app.use("/api/", apiLimiter);
-```
-**Problém:** Limity sú len „per minútu" a identifikácia IP pri `trust proxy` môže byť zneužitá
-(bod 1.5). Útočník meniaci IP / používajúci botnet prejde ľahko. Navyše nie je žiadny **denný** limit
-a žiadny **globálny strop nákladov** pre agenta (DeepSeek + Tavily sú platené).
-
-**Odporúčanie:**
-1. **Denná kvóta na IP** (napr. pomocou rozšírenej cache key: IP + deň). Presunúť si „cost" stav do
-   SQLite alebo Redis a inkrementovať.
-2. **Globálny denný rozpočet v eurách/tokenoch** — ak sa prekročí, agent sa vypne / vráti
-   „služba dočasne nedostupná" (vestav do `runAgent` aj na vstupe `/api/messages`).
-3. **`apiLimiter.max` znížiť** (20/min na agenta je veľa) a pridať **backlog/delay** pre drahé
-   operácie. Kľúč determinovať spoľahlivo (Dátum + IP, resp. cez `req.ip` overený za Caddy).
-4. **Zaviesť maximálny počet agent behov rovnako na úrovni samotného agentu**, nie len HTTP.
-
-### 1.4 [V] XSS v `/history` (nedostatočné escapovanie, neoverené dáta)
-**Súbor:** `backend/server.js` (render `/history`, r. ~218)
-```js
-r.location.replace(/</g, "&lt;")   // escapuje LEN "<"
-```
-Ostatné polia (IP, status, user_agent, chybové hlásenia) sú vypísané priamo bez kódovania a do HTML
-sa vkladá kontext; stránka je čisto `text/html`.
-
-**Problém:** ak sa do DB dostane kontrolovaný reťazec (napr. cez `user-agent`, IP cez `X-Forwarded-For`
-pri priamom prístupe, alebo cez pola správy), stránka môže vykonať markup. Ochrana je dnes „iba Caddy
-basic_auth" — čo je slabá obranná vrstva (defense-in-depth porušené).
-
-**Odporúčanie:**
-- Escapovať **všetky** interpolované hodnoty (`&`, `<`, `>`, `"`, `'`) vo funkcii `esc()` a použiť
-  ju na každé pole v šablóne `/history`.
-- Prípadne stránku renderovať ako JSON + render na fronte (React escapuje sám).
-- `/history` držať za **skutočnou** autentifikáciou (Caddy basic_auth je OK pre vlastníka, ale default
-  is too weak — pozri 1.6).
-
-### 1.5 [V] `trust proxy` + expozícia backend portu → obídenie limitu a IP spoofing
-**Súbor:** `backend/server.js` (r. 17 `app.set("trust proxy", 1)`), `docker-compose.dev.yml` (mapuje
-`3001:3001` a `5173:5173`).
-
-**Problém:** Pri `trust proxy: 1` berie Express IP z `X-Forwarded-For` a verte prvému hopu. Keď je
-backend port verejne exponovaný (`docker-compose.dev.yml` mapuje 3001), útočník môže poslať vlastnú
-hlavičku `X-Forwarded-For` a **zmeniť si „IP"** — čím obíde rate limiting a zapíše falošnú IP do
-histórie.
-
-**Odporúčanie:**
-- **Nikdy nemapovať `backend:3001` verejne.** V dev používať len 5173 (frontend proxy na `/api`) je OK.
-- Overiť `X-Forwarded-For` / použiť `trust proxy` iba keď je reálne proxy pred commitom, a nastaviť
-  pevný počet hops (napr. `"loopback, linklocal, uniquelocal"` alebo konkrétny proxy IP).
-- V produkcii nepovoliť priame spojenie na backend z internetu — len cez Caddy/Nginx.
-
-### 1.6 [V] `/history` bez vlastnej autentifikácie v aplikácii
-**Súbor:** `backend/server.js` (r. 201 — `/history` nemá `authMiddleware`; iba `/api/messages` ho má),
-`docker-compose.yml` (Caddy `@history_path` + basic_auth).
-
-**Problém:** Autentifikácia histórie je **iba** na úrovni Caddy (path `history*`). Ak sa backend
-zverejní/prilnú porty (pozri 1.5), `/history` je otvorené a zverejňuje **IP adresy**, user-agenty
-a históriu vyhľadávaní všetkých návštevníkov (súkromný údaj).
-
-**Odporúčanie:**
-- Pridať **vlastnú autorizáciu aj v aplikácii** (napr. `API_ADMIN_TOKEN` len pre `/history`, overovaný
-  timing-safe), t.j. defense-in-depth popri Caddy.
-- Aspoň **neukladať plné IP adresy** (bod 2.3 – súkromie) alebo ich šifrovať/hash-ovať.
-- Nezverejňovať `/history` vôbec — má to byť súkromný endpoint vlastníka.
+*Zostávajúce nižšie riziká: anonymizácia IP, CORS `*`, spresnenie `trust proxy`, drobné v 3.*
 
 ---
 
-## 2. Stredné (odporúča sa riešiť)
+## 1. Kritické / Vysoké
 
-### 2.1 [S] Chýba Content-Security-Policy (CSP)
-**Súbor:** `frontend/nginx.conf` — sú pridané `X-Frame-Options`, `X-Content-Type-Options`,
-`Referrer-Policy`, ale **nie CSP**.
+### 1.1 [K] Klient kontroloval systém prompt a max_tokens → prompt injection a zneužitie nákladov — ✅ **vyriešené**
 
-**Odporúčanie:** Pridať CSP hlavičku, napr.:
-```
-default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.tile.openstreetmap.org; connect-src 'self' https://*.open-meteo.com;
-```
-(Prispôsobiť tak, aby nezablokoval Leaflet / Open-Meteo / Nominatim a PWA service worker.)
-CSP je dôležitá defensívna vrstva proti XSS (aj keď React escapuje, jedna chyba ju eliminuje).
+**Pôvodná situácia:** `POST /api/messages` bral `{ system, messages, max_tokens }` priamo z tela.
+Verejný útočník mohol obísť prompt, nechať agenta robiť ľubovoľné Tavily vyhľadávania a nastaviť
+obrovské `max_tokens` (ekonomická zneužitie platenej API).
 
-### 2.2 [S] Únik interných chýb
-**Súbor:** `backend/server.js` (r. 197 a catch bloky)
+**Aktuálny stav (`backend/server.js`, `backend/prompts.js`):**
+- Token `system` od klienta sa **ignoruje**. Server si prompt zostaví sám vo funkcii
+  `buildPrompt(mode, profile, rawLocation)` (nový modul `backend/prompts.js`, ~206 riadkov).
+- `max_tokens` je **fixný konštantou** `MAX_TOKENS = 8000` (riadok 13) a ID sa nedá z tela.
+- Z tela sa preberá len poloha/mód a `messages` (validované, pole).
+- Klientské dáta sa vkladajú do promptu ako `userMessage`, nie ako kontrolný systémový prompt →
+  prompt injection priestor sa drasticky zmenšil.
+- Pribudol unit test (`backend/server.test.js`), ktorý overuje, že server **ignoruje** `system`
+  aj `max_tokens: 999999` od klienta a použije `max_tokens = 8000`.
+
+**Pokračovanie (voliteľné):** sprísniť `messages` – rezať dĺžku každej správy a počet správ,
+prípadne ešte znížiť stropy agenta (limit 10 vyhľadávaní, 25 krokov je stále štedrých).
+
+### 1.2 [K] Falošná autentifikácia cez verejný token — ✅ **vyriešené**
+
+**Pôvodná situácia:** Backend v produkcii vynucoval `API_SECRET_TOKEN`, ktorý bol zapálený do
+verejného bundlu cez `VITE_API_SECRET_TOKEN`. „Auth" bol bezcenný a v rozpore so zámerom public.
+
+**Aktuálny stav:** Overené `grep` – `API_SECRET_TOKEN`, `VITE_API_SECRET_TOKEN`, `x-api-token`,
+`authMiddleware` ani produkčný `throw` **už v kóde nie sú**. Frontend (Bike/HikeAgent), Dockerfile,
+compose ani `.env.example` token neobsahujú. Ochrana verejnej služby je teraz postavená na
+serverových promptoch, denných kvótach a globálnom budgete (body 1.3) + edge (Caddy).
+
+### 1.3 [V] Slabý rate limiting / neexistujúci cenový rozpočet — ✅ **vyriešené**
+
+**Pôvodná situácia:** Len per-minútové limity (`apiLimiter` 20/min, globálny 120/min), obídateľné
+IP spoofingom; žiadny denný limit ani globálny strop nákladov.
+
+**Aktuálny stav (`backend/server.js` r. 13–15, `backend/db.js`):**
+- **Denná kvóta na IP:** `MAX_REQUESTS_PER_IP_PER_DAY` (default 15) →
+  `if (requestsTodayByIp(ip) >= ...) return res.status(429)...` (r. 168).
+- **Globálny denný strop:** `MAX_GLOBAL_REQUESTS_PER_DAY` (default 300) → 429 (r. 165).
+- Počítadlá sa vedú **v SQLite** (`requestsTodayByIp`, `requestsToday`), prežijú reštart (na rozdiel
+  od in-memory cache).
+- Per-minútové limitery (`limiter` 120, `apiLimiter`) ostali.
+- Konfigurovateľné cez env vars `.env`.
+
+**Pokračovanie (voliteľné):** zvážiť aj tokenový budget (celkový denný počet vstupných/výstupných
+tokenov), nielen počet HTTP requestov.
+
+### 1.4 [V] XSS v `/history` (nedostatočné escapovanie) — ✅ **vyriešené**
+
+**Pôvodná situácia:** `r.location.replace(/</g, "&lt;")` escapoval len `<`; ostatné polia (IP,
+status, user_agent) sa vypisovali priamo.
+
+**Aktuálny stav (`backend/server.js`):**
 ```js
-res.status(500).json({ error: err.message || "Interná chyba servera." });
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c =>
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]);
 ```
-**Problém:** `err.message` môže obsahovať cesty súborov, názvy modulov, tavily/OpenAI hlášky — klient
-dostáva interné detaily, ktoré pomáhajú útočníkovi (informačný leak).
+`esc()` sa používa na **všetky** používateľom ovplyvniteľné polia v šablóne `/history` (`ip`,
+`location`, `status`). Kompletné escapovanie 5 znakov.
 
-**Odporúčanie:** Vráť generický `{ error: "Interná chyba servera." }` a detaily logovať len na server
-(`console.error`). Konkrétne chybové kódy (napr. 400/401) vrátiť tam, kde to je bezpečné a deterministické.
+### 1.5 [V] `trust proxy` + expozícia backend portu — 🟡 **čiastočne vyriešené**
 
-### 2.3 [S] Súkromie: ukladanie plných IP adries a user-agentov
-**Súbor:** `backend/db.js` (schéma: `ip`, `user_agent`, `location`), `backend/server.js` (INSERT).
+**Pôvodná situácia:** `docker-compose.dev.yml` mapoval porty `3001:3001` a `5173:5173` → útočník
+mohol na backend posielať vlastný `X-Forwarded-For` a obísť limity / zapísať falošnú IP.
 
-**Problém:** Verejná služba zbiera a ukladá osobné údaje (IP, UA) bez možnosti ich vymazať —
-GDPR/súkromie. Naviac je to doplnkový zdroj údajov v prípade úniku DB.
+**Aktuálny stav:**
+- ✅ `docker-compose.dev.yml` **odstránený**; produkčný compose zverejňuje len 3001 na **internú
+  sieť caddy** (žiadne mapovanie host portov). Port 3001 už nie je exponovaný na internet.
+- 🟡 `app.set("trust proxy", 1)` (r. 17) **zostáva**. Pri nexponovanom porte je riziko výrazne
+  nižšie, ale odporúča sa čistejšia definícia proxy hops (napr. `"loopback, linklocal, uniquelocal"`),
+  aby sa IP determinovala jednoznačne za Caddy.
 
-**Odporúčanie:**
-- Ukladať IP len **hash-anonymizované** (napr. SHA-256 + salt alebo skrátenú /24 masku).
-- Ponúknuť endpoint/CLI pre mazanie starších záznamov (retention / `DELETE FROM searches WHERE ts < ...`).
-- Uviesť správcu údajov / cookie zásady, ak to má byť verejná služba v EÚ.
+### 1.6 [V] `/history` bez vlastnej autentifikácie v aplikácii — 🟡 **čiastočne vyriešené**
 
-### 2.4 [S] CORS `*`
-**Súbor:** `backend/server.js` (r. 122–125)
-```js
-app.use(cors({ origin: process.env.CORS_ORIGIN || "*", methods: ["GET","POST"] }));
-```
-**Problém:** Pre verejnú službu to nie je priama vulnerabilita (žiadna cookies/nj stav), ale umožňuje
-každému webu posielať požiadavky na API (ktoré je už verejné). Skôr kosmetické, ale ak pridáte session
-auth, CORS `*` by bol vážny. 
+**Pôvodná situácia:** `/history` nemal authMiddleware; ochrana bola len Caddy basic_auth (path
+`history*`). Pri priamom prístupe na backend port by unikali IP adresy.
 
-**Odporúčanie:** Nastaviť `CORS_ORIGIN` na konkrétnu doménu (napr. Caddy/nginx origin) a v dev použiť
-origin nastavenie. Nedávať `*` ako default.
+**Aktuálny stav:**
+- ✅ Port 3001 už nie je verejne exponovaný (bod 1.5) → priamy neautorizovaný prístup je stiahnutý.
+- ✅ `/history` ostáva za Caddy basic_auth (`caddy.basic_auth: "@history_path"`).
+- 🟡 V aplikácii stále nie je vlastná autorizácia: ak by sa obraz znovu exponoval na host port,
+  `/history` by bolo otvorené. Odporúča sa **defense-in-depth** – voliteľná aplikovaná auth
+  (napr. env `ADMIN_TOKEN`, timing-safe) popri Caddy.
 
-### 2.5 [S] Missing hardening Docker / pinning verzií
-**Súbor:** `frontend/Dockerfile` (`FROM nginx:alpine`, `npm install` nie `npm ci`),
-`backend/Dockerfile`/`Dockerfile` (`node:20-alpine` nepinnované), `docker-compose.yml`.
+---
 
-**Problém:**
-- Nepinnované tagy (`node:20-alpine`, `nginx:alpine`) → nemá reprodukovateľný build (supply-chain).
-- `npm install` (nie `npm ci`) → nemusí rešpektovať lockfile 1:1.
-- Nginx posledný stage beží **ako root** (default) → po kompromitácii má kontajner root.
-- V `frontend/Dockerfile` sa navyše kopíruje `ARG/ENV VITE_API_SECRET_TOKEN` do imidžu (v súlade s C1).
+## 2. Stredné
 
-**Odporúčanie:**
-- Pinnovať image tag na konkrétne verzie (`node:20.19-alpine` / `nginx:1.27-alpine`, ideálne digest).
-- Použiť `npm ci --omit=dev` / `--frozen-lockfile` (a `npm audit` v CI — je).
-- Nginx stage: `USER` non-root alebo znížené capabilities, žiadne `VITE_*` secret do imidžu.
-- Pridať `HEALTHCHECK`.
+### 2.1 [S] Chýbajúca Content-Security-Policy (CSP) — ✅ **vyriešené**
 
-### 2.6 [S] CI/CD — len security job, no build/test
-**Súbor:** `.github/workflows/security.yml` (jediný workflow: gitleaks + npm audit).
+**Aktuálny stav:** Plná CSP pridaná v `docker-compose.yml` do Caddy headerov:
+`default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https://*.tile.openstreetmap.org; connect-src 'self' https://api.open-meteo.com https://nominatim.openstreetmap.org; font-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'` — spolu s `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, HSTS. ⚠️ Pozn.: CSP v docker labels píše hodnotu s vnútornými úvodzovkami – treba overiť, že Caddy ju aplikuje bez zduplikovania úvodzoviek (kľúč `caddy.header.Content-Security-Policy` odvodený z label).
 
-**Problém:** Nie je workflow, ktorý by **zbudoval** a **spustil** testy (backend/testy SPA) pri každom
-PR/pushe. Bez toho sa dá rozbiť build/testy bez povšimnutia.
+### 2.2 [S] Únik interných chýb — ✅ **vyriešené**
+`res.status(500).json({ error: "Interná chyba servera." })` — generická odpoveď; detaily na server.
+Ešte zostáva `result = \`Chyba vyhľadávania: ${err.message}\`` v `runAgent` (r. 106) – táto hláška
+ide do kontextu agenta a odtiaľ môže presiaknuť do odpovede pre klienta. Voliteľne ju očistiť.
 
-**Odporúčanie:** Pridať CI job: `npm ci` → `npm run build` (frontend) → `npm test`/vitest → prípadne
-smoke testy proti test env. Bezpečnostné (gitleaks+audit) nechať.
+### 2.3 [S] Súkromie: IP a user-agenty — 🟡 **čiastočne**
+- ✅ **Retention:** `RETENTION_DAYS` (default 90) + `pruneOldRecords()` spúšťané pri štarte a každých
+  24 h (`setInterval`).
+- ⚠️ IP sa stále ukladá **raw** (`ip` TEXT). Odporúča sa hash-anonymizácia (SHA-256 + salt / /24
+  maska) pre GDPR a zníženie dopadu prípadného úniku DB.
+- ⚠️ `user_agent` a `ip` sa vypisujú na `/history` (za basic_auth) – v poriadku pre vlastníka, ale
+  pri anonymizácii by sa zároveň neukazovali plné údaje.
 
-### 2.7 [S] `express-rate-limit` na statické/health endpointy
-**Súbor:** `backend/server.js` (globálny limiter `app.use(limiter)` pokrýva `/`, `/health`, statiku).
+### 2.4 [S] CORS `*` — ⚠️ **otvorené**
+`origin: process.env.CORS_ORIGIN || "*"` (r. 122–123) zostáva. Pre verejnú službu bez auth nie je
+priamou vulnerabilitou, ale odporúča sa nastaviť `CORS_ORIGIN` na konkrétnu doménu (najmä keď
+niekedy pribudne session/cookie auth).
 
-**Problém:** Store frontend statiku/health limitácii "120/min/IP" — legitímni používatelia s natívnym
-cache busting (napr. prerender) môžu byť limitovaní zbytočne; a hlavne to je nesúrodé s tým, že frontend
-má vlastný nginx.
+### 2.5 [S] Hardening Docker / pinning — ✅ **vyriešené**
+Nový jednotný `Dockerfile`:
+- ⚠️ `npm ci` v oboch stage `/` (`--omit=dev` pre backend) → reprodukovateľný build. ✅
+- Pinnovaný `node:20-bookworm-slim`. ✅ (výslovne nie `:latest`)
+- Finálny image beží ako **`USER node`** + adresár `/app/data` s `chown node:node`. ✅
+- Pridaný `HEALTHCHECK` (fetch `/health`). ✅
+- Žiadne `VITE_*` / API secret v imidži. ✅
+- Frontend sa servíruje cez Express (`public/`), nginx a jeho konfigurácia boli odstránené. ✅
+  (Pozn.: bezpečnostné hlavičky teraz nastavuje Caddy, nie nginx.)
+- V build stage je `apt-get install` python3/make/g++ pre `better-sqlite3` – prítomnosť kompilátora
+  v stage je separátny a z finálneho image je odstránený. ✅
 
-**Odporúčanie:** Nechať riešiť edge (nginx/caddy) statické súbory; na API endpointi použiť prísnejší
-limiter (už je 20/min). Rozlíšiť „static/public" od „api".
+### 2.6 [S] CI/CD — build + test — ✅ **vyriešené**
+Pribudol `.github/workflows/build.yml` popri `security.yml` (gitleaks + npm audit). Overené:
+`backend-test` (vitest `npm test`) **aj** `frontend-build` (vite build) sa v CI spúšťajú. ✅
+
+### 2.7 [S] Rate limit na statiku/health — 🟡 **čiastočne**
+Globálny limiter (`app.use(limiter)`, max 120/min) stále pokrýva `/`, `/health` a statiku. Keďže
+frontend/statika sa teraz servíruje cez Express (nie nginx), možno je to žiaduce. Voliteľne aplikovať
+rýchly limiter len na `/api/` a statiku/health obsluhovať bez limitu (alebo s oveľa vyšším).
 
 ---
 
 ## 3. Nízke / Udržiavacie
 
-### 3.1 [N] Timing-safe porovnanie tokenu
-**Súbor:** `backend/server.js` (authMiddleware)
-```js
-if (token !== process.env.API_SECRET_TOKEN)
-```
-Porovnanie nie je timing-safe. Ak by sa token zachoval (čo neodporúčame), použiť `crypto.timingSafeEqual`
-s overenou dĺžkou. (Ak token odstránite podľa 1.2, tento bod odpadá.)
+### 3.1 [N] Timing-safe porovnanie tokenu — ✅ **bezpredmetné**
+Token bol odstránený (1.2); bod neplatí. (Ak by niekedy pribudla admin auth, použiť
+`crypto.timingSafeEqual`.)
 
-### 3.2 [N] Nevyužitá závislosť
-`backend/package.json` obsahuje `@anthropic-ai/sdk`, ktorý sa nepoužíva (agent beží cez OpenAI-kompat.
-DeepSeek). Odstrániť → menšia útočná plocha a menší `npm audit` povrch.
+### 3.2 [N] Nevyužitá závislosť `@anthropic-ai/sdk` — ⚠️ **otvorené**
+Overené: `@anthropic-ai/sdk ^0.39.0` je **stále v** `backend/package.json`, ale v kóde sa nikde
+nepoužíva (agent beží cez OpenAI-kompat. DeepSeek). Odstrániť → menšia útočná plocha a menší
+`npm audit` povrch.
 
-### 3.3 [N] Protokolovanie (`console.warn`, IP) — log hygiene
-Autorizačné chyby logujú IP — pre verejnú službu v poriadku, ale držte logy de-identifikované a krátko.
+### 3.3 [N] Log hygiene
+Drobné de-identifikované logy; bez akútnej zmeny.
 
 ### 3.4 [N] Nominatim / OpenStreetMap policy
-Frontend volá OSM Nominatim geokódovanie — dodržuje sa UA a limity? Držať cache a obmedziť počet
-žiadostí (Nominatim je rate-limited). Nie priamo bezpečnostné, ale prevádzkové.
+Frontend volá OSM Nominatim – držať UA, cache a rate-limit žiadostí. Prevádzkové, nie bezpečnostné.
 
 ### 3.5 [N] SPA fallback `app.get("*")`
-Vráti index pre každú neznámu cestu — pri `text/html`, ale API `*` by sa malo 404 (testy už overujú
-`/api/neznamy` → 404; zachovať). V poriadku, už je riešené.
+V poriadku; testy overujú, že `/api/neznamy` → 404.
 
-### 3.6 [N] `SECURITY.md` sa nezhoduje so zámerom „public"
-**Súbor:** `SECURITY.md` tvrdí, že `/api/messages` je chránené `x-api-token` a `/history` cez basic_auth.
-Pri verejnej službe bez prihlasovania to treba prepísať — popisovať reálny model (server prompt,
-denné kvóty, budget). Dokumentácia je „live"; inak zavádza.
+### 3.6 [N] `SECURITY.md`
+✅ **Aktualizovaný** na remote (prepísaný na model verejnej služby – server prompty, denné kvóty,
+budget). Udržiavať v súlade so `SECURITY-ANALYSIS.md`.
 
 ---
 
-## 4. Odporúčaný akčný plán (v poradí priority)
+## 4. Aktualizovaný akčný plán (zostávajúce odporúčania)
 
-**Krok 1 — vyriešiť C1 a C2 (kritické pre verejné nasadenie):**
-- Odstrániť `API_SECRET_TOKEN` / `VITE_API_SECRET_TOKEN` z backendu, frontendu, Dockerfile, compose,
-  `.env.example`. Zrušiť produkčný `throw` vyžadujúci token.
-- Buildovať systém prompt **na serveri**, neprevzatiať `system`, `max_tokens`; stropovať tokeny.
+**Priorita 1 (odporúčané):**
+- 🟡 **Anonymizácia IP** v `db.js` (hash IP / /24 maska) – GDPR a zníženie dopadu úniku.
+- 🟡 **Definovať `trust proxy` presnejšie** (namiesto `1`) na základe topológie za Caddy.
+- 🟡 **Očistiť `err.message` v `runAgent`** (hláška vyhľadávania ide do odpovede).
 
-**Krok 2 — cenová ochrana:**
-- Denná kvóta na IP + globálny denný budget (preniesť počet vyhľadávaní/tokenov do DB), tvrdšie
-  stropy v `runAgent` (menej krokov, menej vyhľadávaní, znížené `max_tokens`).
+**Priorita 2 (nízko-nákladné vylepšenia):**
+- ⚠️ **Nastaviť `CORS_ORIGIN`** na konkrétnu doménu namiesto `*`.
+- 🟡 Prípadne **limiter** len na `/api/`, statiku/health nechať bez limitu (alebo vyšší strop).
+- ⚠️ Overiť **CSP syntax v Caddy labels** (úvodzovky) a že hlavička sa naozaj aplikuje.
+- ⚠️ Overiť/odstrániť **`@anthropic-ai/sdk`** ak je nepoužitý.
+- 🟡 Prípadne doplniť **tokenový budget** (denný strop na vstup/výstup tokenov) do dennej kvóty.
 
-**Krok 3 — endpointy a dáta:**
-- Vlastná autorizácia `/history` v aplikácii (nie len Caddy), escapovanie všetkých poli na `/history`,
-  hash/anonymizácia IP, retention politika.
-
-**Krok 4 — infraštruktúra:**
-- Nepublikovať `backend:3001`, opraviť `CORS_ORIGIN`, pridať CSP v nginx, spravovať `err.message`,
-  pinnovať Docker tagy, `npm ci`, Nginx non-root.
-
-**Krok 5 — CI/CD:**
-- Pridať build+test workflow (frontend build, vitest, prípadne smoke testy) popri security jobe.
-
-**Krok 6 — doklady:**
-- Prepísať `SECURITY.md`, event. pridať `SECURITY.md` model s ohrozeniami a mitigáciami vyššie.
+**Všetky kritické a väčšina stredných nálezov je už implementovaná** – toto sú len dorovnávacie body.
 
 ---
 
@@ -308,13 +217,15 @@ denné kvóty, budget). Dokumentácia je „live"; inak zavádza.
 
 - ✔ SQLite cez **prepared statements** → odolný voči SQL injection.
 - ✔ Body size limit `1mb`.
-- ✔ Rate limiting (aj keď treba posilniť dennou kvótou a budgetom).
-- ✔ React escaluje dáta — žiadne `dangerouslySetInnerHTML` na fronte.
-- ✔ Bezpečnostné hlavičky na Nginx (aj keď chýba CSP).
-- ✔ Docker stagey bežia (backend) ako non-root `USER node`.
-- ✔ gitleaks + npm audit v CI (bez zistených tajomstiev — kontrola vykonala i prehliadku git histórie).
-- ✔ `jsonrepair` a klientske validácie na fronte.
-- ✔ Testy ASCII/status kontroly existujú (smoke testy: 400/401, 404 neznámy API, bezpečnostné hlavičky).
+- ✔ Denná kvóta na IP (15) + globálny denný strop (300) v SQLite + per-minútové limitery.
+- ✔ Serverové promptovanie (`prompts.js`) – klient nekontroluje `system`/`max_tokens`.
+- ✔ React escapuje dáta – žiadne `dangerouslySetInnerHTML` na fronte.
+- ✔ Kompletná `esc()` na `/history`.
+- ✔ Bezpečnostné hlavičky + CSP + HSTS cez Caddy.
+- ✔ Docker: `npm ci`, pinnovaný Node, non-root `USER node`, `HEALTHCHECK`, žiadne secret v imidži.
+- ✔ Retention záznamov (90 dní, auto-prune).
+- ✔ gitleaks + npm audit + build (CI).
+- ✔ Testy servera (prompt/max_tokens kontrola) a smoke testy.
 
 ---
 
