@@ -46,7 +46,7 @@ jobs:
           fail_ci_if_error: false
 
   frontend-build:
-    name: Frontend — build (vite)
+    name: Frontend — testy + coverage + build (vite)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -62,6 +62,22 @@ jobs:
       - name: npm ci
         working-directory: frontend
         run: npm ci
+
+      - name: Coverage provider (bez zmeny lockfile)
+        working-directory: frontend
+        run: npm install --no-save @vitest/coverage-v8@^2.0.0
+
+      - name: npm test (s coverage)
+        working-directory: frontend
+        run: npm test -- --coverage --coverage.reporter=lcov
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: frontend/coverage/lcov.info
+          flags: frontend
+          fail_ci_if_error: false
 
       - name: npm run build
         working-directory: frontend
