@@ -21,6 +21,12 @@ BikeAgent v mobilnom PWA rozhraní pre dve reálne vyhľadávané lokality:
 |---|---|
 | <img src="docs/screenshots/mozirje-mobile.jpg" width="280" alt="BikeAgent — cyklotrasy okolo Mozirje, Slovinsko"> | <img src="docs/screenshots/vavrisovo-mobile.jpg" width="280" alt="BikeAgent — cyklotrasy okolo Vavrišova, Liptov"> |
 
+HikeAgent — profil skupiny mení kritériá aj vzhľad výsledkov (senior-friendly vs. kočík-friendly):
+
+| Nitra — seniori | Trenčín — kočík |
+|---|---|
+| <img src="docs/screenshots/nitra-seniori-mobile.jpg" width="280" alt="HikeAgent — turistické trasy pre seniorov v Nitre"> | <img src="docs/screenshots/trencin-kocik-mobile.jpg" width="280" alt="HikeAgent — trasy vhodné pre kočík v Trenčíne"> |
+
 ## Architektúra
 
 ```
