@@ -4,7 +4,7 @@ import rateLimit from "express-rate-limit";
 import OpenAI from "openai";
 import path from "path";
 import { fileURLToPath } from "url";
-import { insertSearch, getHistory, getStats, requestsTodayByIp, requestsToday, pruneOldRecords } from "./db.js";
+import { insertSearch, getHistory, getStats, requestsTodayByIp, requestsToday, requestsTodayByIpBreakdown, pruneOldRecords } from "./db.js";
 import { buildPrompt } from "./prompts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +13,13 @@ const PORT = process.env.PORT || 3001;
 const MAX_TOKENS = 8000;
 const MAX_REQUESTS_PER_IP_PER_DAY = Number(process.env.MAX_REQUESTS_PER_IP_PER_DAY) || 15;
 const MAX_GLOBAL_REQUESTS_PER_DAY = Number(process.env.MAX_GLOBAL_REQUESTS_PER_DAY) || 300;
+
+// Cenový model DeepSeek + Tavily (zhodné s frontend/src/components/shared.jsx)
+const PRICE_INPUT  = 0.27 / 1_000_000;
+const PRICE_OUTPUT = 1.10 / 1_000_000;
+const PRICE_SEARCH = 0.01;
+const calcCost = (inputTokens, outputTokens, searchCount) =>
+  (inputTokens || 0) * PRICE_INPUT + (outputTokens || 0) * PRICE_OUTPUT + (searchCount || 0) * PRICE_SEARCH;
 
 app.set("trust proxy", 1);
 
@@ -193,6 +200,8 @@ app.post("/api/messages", async (req, res) => {
 app.get("/history", (req, res) => {
   const rows  = getHistory();
   const stats = getStats();
+  const globalToday  = requestsToday();
+  const ipBreakdown  = requestsTodayByIpBreakdown();
 
   const fmt = iso => {
     if (!iso) return "—";
@@ -201,6 +210,7 @@ app.get("/history", (req, res) => {
   };
   const ms = v => v != null ? `${v} ms` : "—";
   const num = v => v != null ? v.toLocaleString("sk-SK") : "0";
+  const money = v => "$" + v.toFixed(4);
   const esc = v => String(v ?? "").replace(/[&<>"']/g, c => (
     { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
   ));
@@ -217,6 +227,25 @@ app.get("/history", (req, res) => {
       <td>${ms(r.duration_ms)}</td>
       <td><span class="badge ${esc(r.status)}">${esc(r.status)}</span></td>
     </tr>`).join("");
+
+  const globalPct = Math.min(100, Math.round((globalToday / MAX_GLOBAL_REQUESTS_PER_DAY) * 100));
+  const totalSpendToday = ipBreakdown.reduce(
+    (sum, r) => sum + calcCost(r.total_input_tokens, r.total_output_tokens, r.total_searches), 0
+  );
+
+  const ip_rows_html = ipBreakdown.map(r => {
+    const cost = calcCost(r.total_input_tokens, r.total_output_tokens, r.total_searches);
+    const ipPct = Math.min(100, Math.round((r.request_count / MAX_REQUESTS_PER_IP_PER_DAY) * 100));
+    return `
+    <tr class="${ipPct >= 100 ? 'err' : ''}">
+      <td>${r.ip ? esc(r.ip) : "—"}</td>
+      <td>${r.request_count} / ${MAX_REQUESTS_PER_IP_PER_DAY}</td>
+      <td>${r.total_searches ?? 0}</td>
+      <td>${num(r.total_input_tokens)}</td>
+      <td>${num(r.total_output_tokens)}</td>
+      <td>${money(cost)}</td>
+    </tr>`;
+  }).join("");
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(`<!DOCTYPE html>
@@ -250,10 +279,25 @@ app.get("/history", (req, res) => {
   .badge.ok{background:#d1fae5;color:#065f46}
   .badge.error{background:#fee2e2;color:#991b1b}
   @media(max-width:700px){th:nth-child(5),td:nth-child(5),th:nth-child(6),td:nth-child(6),th:nth-child(7),td:nth-child(7){display:none}}
+  .tabs{display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid #d1fae5}
+  .tab-btn{padding:10px 18px;border:none;background:none;font-size:.88rem;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:2px solid transparent;font-family:inherit}
+  .tab-btn.active{color:#059669;border-bottom-color:#059669}
+  .tab-panel{display:none}
+  .tab-panel.active{display:block}
+  .progress{background:#f0fdf4;border:1px solid #d1fae5;border-radius:8px;height:10px;overflow:hidden;margin-top:8px}
+  .progress-fill{height:100%;background:#059669;transition:width .3s}
+  .progress-fill.warn{background:#d97706}
+  .progress-fill.full{background:#dc2626}
 </style>
 </head>
 <body>
 <h1>🚴 BikeAgent — História vyhľadávaní</h1>
+<div class="tabs">
+  <button class="tab-btn active" id="tab-btn-history" data-tab="history">📋 História</button>
+  <button class="tab-btn" id="tab-btn-quotas" data-tab="quotas">📊 Kvóty a náklady</button>
+</div>
+
+<div class="tab-panel active" id="tab-history">
 <div class="stats">
   <div class="stat"><div class="val">${num(stats.total)}</div><div class="lbl">Celkom požiadaviek</div></div>
   <div class="stat"><div class="val">${num(stats.ok_count)}</div><div class="lbl">Úspešných</div></div>
@@ -263,15 +307,15 @@ app.get("/history", (req, res) => {
   <div class="stat"><div class="val">${stats.avg_duration_ms != null ? Math.round(stats.avg_duration_ms / 1000) + ' s' : '—'}</div><div class="lbl">Priemerná odozva</div></div>
 </div>
 <div class="filters">
-  <input type="text"   id="f-loc"    placeholder="🔍 Lokalita…"   oninput="applyFilters()">
-  <input type="text"   id="f-ip"     placeholder="🔍 IP adresa…"  oninput="applyFilters()">
-  <input type="text"   id="f-date"   placeholder="🔍 Dátum (napr. 2026-05)…" oninput="applyFilters()">
-  <select id="f-status" onchange="applyFilters()">
+  <input type="text"   id="f-loc"    placeholder="🔍 Lokalita…">
+  <input type="text"   id="f-ip"     placeholder="🔍 IP adresa…">
+  <input type="text"   id="f-date"   placeholder="🔍 Dátum (napr. 2026-05)…">
+  <select id="f-status">
     <option value="">Všetky stavy</option>
     <option value="ok">ok</option>
     <option value="error">error</option>
   </select>
-  <button onclick="clearFilters()" style="padding:6px 12px;border:1px solid #d1fae5;border-radius:8px;background:#fff;font-size:.82rem;color:#6b7280;cursor:pointer">✕ Zrušiť</button>
+  <button id="f-clear" style="padding:6px 12px;border:1px solid #d1fae5;border-radius:8px;background:#fff;font-size:.82rem;color:#6b7280;cursor:pointer">✕ Zrušiť</button>
   <span id="count"></span>
 </div>
 <table>
@@ -282,34 +326,31 @@ app.get("/history", (req, res) => {
   </tr></thead>
   <tbody id="tbody">${rows_html || '<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af">Zatiaľ žiadne záznamy</td></tr>'}</tbody>
 </table>
-<script>
-  const COL = { loc: 3, ip: 2, date: 1, status: 8 };
-  function applyFilters() {
-    const loc    = document.getElementById('f-loc').value.trim().toLowerCase();
-    const ip     = document.getElementById('f-ip').value.trim().toLowerCase();
-    const date   = document.getElementById('f-date').value.trim().toLowerCase();
-    const status = document.getElementById('f-status').value;
-    let visible = 0;
-    document.querySelectorAll('#tbody tr').forEach(tr => {
-      const cells = tr.querySelectorAll('td');
-      if (!cells.length) return;
-      const match =
-        (!loc    || cells[COL.loc]?.textContent.toLowerCase().includes(loc)) &&
-        (!ip     || cells[COL.ip]?.textContent.toLowerCase().includes(ip)) &&
-        (!date   || cells[COL.date]?.textContent.toLowerCase().includes(date)) &&
-        (!status || cells[COL.status]?.textContent.trim() === status);
-      tr.classList.toggle('hidden', !match);
-      if (match) visible++;
-    });
-    const total = document.querySelectorAll('#tbody tr:not(.hidden)').length;
-    document.getElementById('count').textContent = loc||ip||date||status ? visible + ' záznamov' : '';
-  }
-  function clearFilters() {
-    ['f-loc','f-ip','f-date'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('f-status').value = '';
-    applyFilters();
-  }
-</script>
+</div>
+
+<div class="tab-panel" id="tab-quotas">
+<div class="stats">
+  <div class="stat"><div class="val">${globalToday} / ${MAX_GLOBAL_REQUESTS_PER_DAY}</div><div class="lbl">Globálne požiadavky dnes</div></div>
+  <div class="stat"><div class="val">${money(totalSpendToday)}</div><div class="lbl">Odhadovaná útrata dnes</div></div>
+  <div class="stat"><div class="val">${num(ipBreakdown.length)}</div><div class="lbl">Aktívnych IP dnes</div></div>
+  <div class="stat"><div class="val">${MAX_REQUESTS_PER_IP_PER_DAY}</div><div class="lbl">Limit na IP / deň</div></div>
+</div>
+<div style="background:#fff;border:1px solid #d1fae5;border-radius:10px;padding:16px 18px;margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;font-size:.82rem;color:#6b7280;margin-bottom:4px">
+    <span>Globálny denný limit</span><span>${globalToday} / ${MAX_GLOBAL_REQUESTS_PER_DAY} (${globalPct}%)</span>
+  </div>
+  <div class="progress"><div class="progress-fill ${globalPct >= 100 ? 'full' : globalPct >= 80 ? 'warn' : ''}" style="width:${globalPct}%"></div></div>
+</div>
+<table>
+  <thead><tr>
+    <th>IP</th><th>Požiadaviek dnes</th><th>Vyhľadávaní</th>
+    <th>Vstup tok.</th><th>Výstup tok.</th><th>Odhad. útrata</th>
+  </tr></thead>
+  <tbody>${ip_rows_html || '<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af">Dnes zatiaľ žiadne požiadavky</td></tr>'}</tbody>
+</table>
+</div>
+
+<script src="/history.js"></script>
 </body>
 </html>`);
 });

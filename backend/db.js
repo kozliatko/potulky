@@ -68,6 +68,21 @@ const countGlobalToday = db.prepare(`
 
 export const requestsToday = () => countGlobalToday.get().count;
 
+const byIpToday = db.prepare(`
+  SELECT
+    ip,
+    COUNT(*)              AS request_count,
+    SUM(search_count)     AS total_searches,
+    SUM(input_tokens)     AS total_input_tokens,
+    SUM(output_tokens)    AS total_output_tokens
+  FROM searches
+  WHERE created_at >= date('now')
+  GROUP BY ip
+  ORDER BY request_count DESC
+`);
+
+export const requestsTodayByIpBreakdown = () => byIpToday.all();
+
 // ─── Retencia dát ─────────────────────────────────────────────────────────────
 // IP adresy a lokality sú osobné/citlivé údaje — nezachovávame ich navždy.
 

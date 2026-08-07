@@ -184,6 +184,28 @@ describe("GET /history", () => {
     expect(res.text).not.toContain("<script>alert(1)</script>");
     expect(res.text).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
   });
+
+  it("obsahuje záložku Kvóty a náklady s globálnym limitom a per-IP útratou", async () => {
+    await request(app).post("/api/messages").set("X-Forwarded-For", "9.9.9.9").send({ mode: "bike", location: "Zvolen" });
+
+    const res = await request(app).get("/history");
+    expect(res.text).toContain("tab-quotas");
+    expect(res.text).toContain("Kvóty a náklady");
+    expect(res.text).toContain(`/ ${300}`); // default MAX_GLOBAL_REQUESTS_PER_DAY
+    expect(res.text).toContain("9.9.9.9");
+    expect(res.text).toMatch(/\$\d+\.\d{4}/); // odhad. útrata vo formáte $X.XXXX
+  });
+
+  it("escapuje XSS payload v IP aj v novej tabuľke kvót", async () => {
+    const payload = "<img src=x onerror=alert(1)>";
+    await request(app)
+      .post("/api/messages")
+      .set("X-Forwarded-For", payload)
+      .send({ mode: "hike", location: "Poprad" });
+
+    const res = await request(app).get("/history");
+    expect(res.text).not.toContain("<img src=x onerror=alert(1)>");
+  });
 });
 
 describe("Neznáme API endpointy", () => {
