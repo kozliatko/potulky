@@ -50,3 +50,20 @@ export const getStats = () =>
       ROUND(AVG(CASE WHEN status='ok' THEN duration_ms END))  AS avg_duration_ms
     FROM searches
   `).get();
+
+// ─── Denné kvóty a rozpočet ───────────────────────────────────────────────────
+// "Dnes" počítané v UTC, zhodne s created_at (strftime('%Y-%m-%dT...Z', 'now')).
+
+const countByIpToday = db.prepare(`
+  SELECT COUNT(*) AS count FROM searches
+  WHERE ip = ? AND created_at >= date('now')
+`);
+
+export const requestsTodayByIp = ip => countByIpToday.get(ip).count;
+
+const countGlobalToday = db.prepare(`
+  SELECT COUNT(*) AS count FROM searches
+  WHERE created_at >= date('now')
+`);
+
+export const requestsToday = () => countGlobalToday.get().count;

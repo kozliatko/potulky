@@ -1,5 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
+
+process.env.DB_PATH = ":memory:";
 
 const { createMock } = vi.hoisted(() => ({ createMock: vi.fn() }));
 
@@ -116,6 +118,51 @@ describe("POST /api/messages — server kontroluje system prompt a max_tokens", 
     const callArgs = createMock.mock.calls[0][0];
     const userMsg = callArgs.messages[1].content;
     expect(userMsg.length).toBeLessThan(400);
+  });
+});
+
+describe("POST /api/messages — denné kvóty", () => {
+  // Vlastná izolovaná :memory: DB a znížené limity (cez vi.resetModules),
+  // aby predošlé testy v tomto súbore neovplyvnili hranice kvót nižšie
+  // a naopak — tieto nízke limity neovplyvnia zdieľanú `app` vyššie.
+  let quotaApp;
+
+  beforeEach(async () => {
+    process.env.MAX_REQUESTS_PER_IP_PER_DAY = "3";
+    process.env.MAX_GLOBAL_REQUESTS_PER_DAY = "5";
+    vi.resetModules();
+    createMock.mockReset();
+    createMock.mockResolvedValue({
+      choices: [{ message: { role: "assistant", content: '{"summary":"test"}' } }],
+      usage: { prompt_tokens: 10, completion_tokens: 20 },
+    });
+    ({ default: quotaApp } = await import("./server.js"));
+  });
+
+  afterEach(() => {
+    delete process.env.MAX_REQUESTS_PER_IP_PER_DAY;
+    delete process.env.MAX_GLOBAL_REQUESTS_PER_DAY;
+  });
+
+  it("po MAX_REQUESTS_PER_IP_PER_DAY (3) vracia 429 pre tú istú IP", async () => {
+    for (let i = 0; i < 3; i++) {
+      const res = await request(quotaApp).post("/api/messages").send({ mode: "bike", location: "Nitra" });
+      expect(res.status).toBe(200);
+    }
+    const res = await request(quotaApp).post("/api/messages").send({ mode: "bike", location: "Nitra" });
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBeTruthy();
+  });
+
+  it("po MAX_GLOBAL_REQUESTS_PER_DAY (5) vracia 503 aj pre inú IP", async () => {
+    for (let i = 0; i < 3; i++) {
+      await request(quotaApp).post("/api/messages").set("X-Forwarded-For", "1.1.1.1").send({ mode: "bike", location: "Nitra" });
+    }
+    for (let i = 0; i < 2; i++) {
+      await request(quotaApp).post("/api/messages").set("X-Forwarded-For", "2.2.2.2").send({ mode: "hike", location: "Žilina" });
+    }
+    const res = await request(quotaApp).post("/api/messages").set("X-Forwarded-For", "3.3.3.3").send({ mode: "bike", location: "Prešov" });
+    expect(res.status).toBe(503);
   });
 });
 

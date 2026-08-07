@@ -4,13 +4,15 @@ import rateLimit from "express-rate-limit";
 import OpenAI from "openai";
 import path from "path";
 import { fileURLToPath } from "url";
-import { insertSearch, getHistory, getStats } from "./db.js";
+import { insertSearch, getHistory, getStats, requestsTodayByIp, requestsToday } from "./db.js";
 import { buildPrompt } from "./prompts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 const MAX_TOKENS = 8000;
+const MAX_REQUESTS_PER_IP_PER_DAY = Number(process.env.MAX_REQUESTS_PER_IP_PER_DAY) || 15;
+const MAX_GLOBAL_REQUESTS_PER_DAY = Number(process.env.MAX_GLOBAL_REQUESTS_PER_DAY) || 300;
 
 app.set("trust proxy", 1);
 
@@ -158,6 +160,13 @@ app.post("/api/messages", async (req, res) => {
   const prompt = buildPrompt(mode, profile, rawLocation);
   if (!prompt) {
     return res.status(400).json({ error: "Neplatná požiadavka — chýba alebo je neplatné mode/location." });
+  }
+
+  if (requestsToday() >= MAX_GLOBAL_REQUESTS_PER_DAY) {
+    return res.status(503).json({ error: "Denný limit vyhľadávaní služby bol dosiahnutý. Skús to zajtra." });
+  }
+  if (requestsTodayByIp(ip) >= MAX_REQUESTS_PER_IP_PER_DAY) {
+    return res.status(429).json({ error: "Dosiahol si denný limit vyhľadávaní pre túto IP adresu. Skús to zajtra." });
   }
 
   try {
