@@ -163,6 +163,24 @@ Caddy-docker-proxy zaregistruje kontajner a app je dostupná na doméne nastaven
 
 Zobrazuje: čas, IP, lokalita, počet vyhľadávaní, tokeny, trvanie, status (ok/error).
 
+**Retencia:** záznamy staršie ako `HISTORY_RETENTION_DAYS` (default 90 dní) sa automaticky mažú pri štarte appky a potom každých 24 hodín.
+
+---
+
+## Bezpečnostné hlavičky
+
+Nastavené cez Caddy labely v `docker-compose.yml` (`caddy.header.*`):
+
+| Hlavička | Hodnota |
+|---|---|
+| `Content-Security-Policy` | obmedzuje zdroje na `'self'` + explicitne povolené domény (Leaflet CDN, OSM dlaždice, Open-Meteo, Nominatim) |
+| `X-Frame-Options` | `SAMEORIGIN` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
+
+> Viacslovné hodnoty (CSP, HSTS) musia mať v YAML labeli doslovné úvodzovky (`'"hodnota"'`), inak ich Caddy Caddyfile parser potichu odmietne.
+
 ---
 
 ## Testovanie
