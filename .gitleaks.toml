@@ -9,8 +9,3 @@ paths = [
   '''\.env\.example$''',
   '''backend/server\.test\.js$''',
 ]
-regexes = [
-  '''tvoj-token''',
-  '''zmen-toto-na-vlastny-tajny-token''',
-  '''vlastny-tajny-token''',
-]
