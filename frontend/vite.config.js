@@ -62,6 +62,11 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test-setup.js",
+    coverage: {
+      // public/ je statický passthrough (napr. history.js pre /history admin
+      // stránku, servované backendom) — nie je súčasťou React appky.
+      exclude: ["public/**", "**/*.config.js", "dist/**"],
+    },
   },
   server: {
     host: "0.0.0.0",
