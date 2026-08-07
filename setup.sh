@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup.sh — Overenie a inštalácia závislostí pre BikeAgent
+# setup.sh — Overenie a inštalácia závislostí pre Potulky
 # Použitie: bash setup.sh [--yes]   (--yes preskočí všetky potvrdenia)
 set -euo pipefail
 
@@ -31,7 +31,7 @@ confirm() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Hlavička ────────────────────────────────────────────────────────────────
-echo -e "\n${BOLD}BikeAgent — setup skript${NC}"
+echo -e "\n${BOLD}Potulky — setup skript${NC}"
 echo    "  Adresár projektu: ${SCRIPT_DIR}"
 echo    "  Dátum: $(date '+%Y-%m-%d %H:%M')"
 
@@ -218,29 +218,21 @@ ENV_EXAMPLE="${SCRIPT_DIR}/.env.example"
 if [[ -f "$ENV_FILE" ]]; then
   ok ".env existuje"
 
-  # Skontroluj povinné premenné
+  # Skontroluj premenné dynamicky podľa .env.example — nezávisle na tom,
+  # čo sa v .env.example pridá/zmení do budúcna (žiadny natvrdo zapísaný
+  # zoznam, ktorý by sa mohol rozísť so skutočným stavom projektu).
   MISSING_VARS=()
-  check_var() {
-    local var="$1"
-    if ! grep -qE "^${var}=.+" "$ENV_FILE" 2>/dev/null; then
-      MISSING_VARS+=("$var")
-    fi
-  }
-
-  # Zisti aktívnu vetvu
-  GIT_BRANCH=$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-  info "Git vetva: ${GIT_BRANCH}"
-
-  if [[ "$GIT_BRANCH" == "main" ]]; then
-    check_var "ANTHROPIC_API_KEY"
-  else
-    # deepseek alebo iná vetva
-    check_var "DEEPSEEK_API_KEY"
-    check_var "TAVILY_API_KEY"
+  if [[ -f "$ENV_EXAMPLE" ]]; then
+    while IFS='=' read -r key _; do
+      [[ "$key" =~ ^[A-Z_]+$ ]] || continue
+      if ! grep -qE "^${key}=.+" "$ENV_FILE" 2>/dev/null; then
+        MISSING_VARS+=("$key")
+      fi
+    done < <(grep -E '^[A-Z_]+=' "$ENV_EXAMPLE")
   fi
 
   if [[ ${#MISSING_VARS[@]} -eq 0 ]]; then
-    ok "Povinné API kľúče sú nastavené"
+    ok "Premenné z .env.example sú nastavené"
   else
     add_warning "Chýbajúce alebo prázdne premenné v .env: ${MISSING_VARS[*]}"
     info "Doplň ich do ${ENV_FILE}"
@@ -260,79 +252,35 @@ else
   fi
 fi
 
-# ─── 9. TLS certifikáty ─────────────────────────────────────────────────────
-header "TLS certifikáty (Caddy)"
+# ─── 9. Docker sieť 'caddy' ──────────────────────────────────────────────────
+header "Docker sieť 'caddy'"
 
-CERT_DIR="${SCRIPT_DIR}/certs"
-CERT_FILE="${CERT_DIR}/cert.pem"
-KEY_FILE="${CERT_DIR}/key.pem"
-
-if [[ ! -d "$CERT_DIR" ]]; then
-  info "Vytváram adresár certs/"
-  mkdir -p "$CERT_DIR"
-fi
-
-CERT_OK=true
-if [[ ! -f "$CERT_FILE" ]]; then
-  add_warning "Chýba: certs/cert.pem"
-  CERT_OK=false
-fi
-if [[ ! -f "$KEY_FILE" ]]; then
-  add_warning "Chýba: certs/key.pem"
-  CERT_OK=false
-fi
-
-if $CERT_OK; then
-  # Základná validácia certifikátu
-  if command -v openssl &>/dev/null; then
-    EXPIRY=$(openssl x509 -enddate -noout -in "$CERT_FILE" 2>/dev/null | cut -d= -f2 || echo "")
-    DAYS_LEFT=$(( ( $(date -d "${EXPIRY}" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
-    if [[ $DAYS_LEFT -gt 30 ]]; then
-      ok "cert.pem platný — expiruje: ${EXPIRY} (${DAYS_LEFT} dní)"
-    elif [[ $DAYS_LEFT -gt 0 ]]; then
-      add_warning "cert.pem expiruje čoskoro: ${EXPIRY} (${DAYS_LEFT} dní)"
-    else
-      add_error "cert.pem je expirovaný alebo nevalidný (${EXPIRY})"
-    fi
-    # Skontroluj zhodu cert ↔ key
-    CERT_MOD=$(openssl x509 -noout -modulus -in "$CERT_FILE" 2>/dev/null | md5sum)
-    KEY_MOD=$(openssl rsa -noout -modulus -in "$KEY_FILE" 2>/dev/null | md5sum)
-    if [[ "$CERT_MOD" == "$KEY_MOD" ]]; then
-      ok "cert.pem a key.pem si zodpovedajú"
-    else
-      add_error "cert.pem a key.pem si NEzodpovedajú!"
-    fi
-  else
-    ok "cert.pem a key.pem existujú (openssl nedostupný — neskontrolovaná platnosť)"
-  fi
+# TLS rieši caddy-docker-proxy automaticky (Let's Encrypt) — appka žiadne
+# lokálne certifikáty ani porty 80/443 sama nepublikuje. Jediná skutočná
+# závislosť na tomto hostiteľovi je existencia zdieľanej externej siete,
+# ktorú docker-compose.yml očakáva ako "external: true".
+if docker network inspect caddy &>/dev/null; then
+  ok "Externá sieť 'caddy' existuje"
 else
-  warn "Bez certifikátov Caddy nespustí HTTPS. Vlož súbory:"
-  info "  certs/cert.pem  ← certifikát"
-  info "  certs/key.pem   ← privátny kľúč"
+  fail "Externá sieť 'caddy' neexistuje"
+  if confirm "Vytvoriť sieť 'caddy'? (docker network create caddy)"; then
+    if docker network create caddy &>/dev/null; then
+      ok "Sieť 'caddy' vytvorená"
+    else
+      add_error "Vytvorenie siete 'caddy' zlyhalo."
+    fi
+  else
+    add_error "Sieť 'caddy' je povinná — docker-compose.yml ju očakáva ako external."
+  fi
 fi
 
-# ─── 10. Porty 80 a 443 ─────────────────────────────────────────────────────
-header "Sieťové porty"
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "caddy"; then
+  ok "Kontajner 'caddy' (caddy-docker-proxy) beží"
+else
+  add_warning "Kontajner 'caddy' nebeží — appka síce naštartuje, ale nebude dostupná zvonka cez HTTPS."
+fi
 
-check_port() {
-  local port="$1"
-  if command -v ss &>/dev/null; then
-    ss -tlnH "sport = :${port}" 2>/dev/null | grep -q . && return 0 || return 1
-  elif command -v netstat &>/dev/null; then
-    netstat -tlnH 2>/dev/null | grep -q ":${port} " && return 0 || return 1
-  fi
-  return 1  # nedokážeme zistiť
-}
-
-for PORT in 80 443; do
-  if check_port "$PORT"; then
-    add_warning "Port ${PORT} je obsadený — skontroluj čo na ňom beží: ss -tlnp | grep :${PORT}"
-  else
-    ok "Port ${PORT} voľný"
-  fi
-done
-
-# ─── 11. Docker build test ───────────────────────────────────────────────────
+# ─── 10. Docker build test ───────────────────────────────────────────────────
 header "Docker build"
 
 if [[ $ERRORS -eq 0 ]]; then
