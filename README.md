@@ -13,6 +13,14 @@
 AI agent pre hľadanie rodinných cyklociest a turistických trás. Podľa zadanej lokality (alebo GPS polohy) a parametrov vyhľadá vhodné trasy, zobrazí ich na mape a pridá predpoveď počasia.
 Hobby projekt pre vlastnú potrebu robený po večeroch počas venčenia psa.
 
+## Ukážka
+
+BikeAgent v mobilnom PWA rozhraní pre dve reálne vyhľadávané lokality:
+
+| Mozirje (Slovinsko) | Vavrišovo (Liptov) |
+|---|---|
+| <img src="docs/screenshots/mozirje-mobile.jpg" width="280" alt="BikeAgent — cyklotrasy okolo Mozirje, Slovinsko"> | <img src="docs/screenshots/vavrisovo-mobile.jpg" width="280" alt="BikeAgent — cyklotrasy okolo Vavrišova, Liptov"> |
+
 ## Architektúra
 
 ```
