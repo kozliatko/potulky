@@ -19,6 +19,11 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - CSP + `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Strict-Transport-Security` cez Caddy `caddy.header.*` labely
 - `.github/workflows/build.yml` — CI job spúšťajúci backend testy (vitest) a frontend build pri každom pushi/PR
 - `.dockerignore` — chýbal úplne, `COPY backend/ .` inak kopírovalo aj lokálny `node_modules/`
+- `/history` — nová záložka **"Kvóty a náklady"**: globálny denný limit s progress barom, per-IP breakdown za dnešok (počet požiadaviek/limit, vyhľadávania, tokeny, odhadovaná útrata v $) — `db.js: requestsTodayByIpBreakdown()`
+- Logovanie neplatných `/api/messages` požiadaviek (IP, mode, kľúče tela) — predtým úplne tiché 400 odpovede bez stopy v logoch
+
+### Changed
+- Zjednotené primárne zdroje dát medzi BikeAgent a HikeAgent — `PRIMARY_SOURCES` (`mapy.cz, komoot.com, openstreetmap`) zdieľané cez `formatSources()` helper, doménovo-špecifické zdroje (cycling.sk/bikemap.net/alltrails.com vs. hiking.sk/hiking.dennikn.sk/turistika.sk) ostávajú oddelené; odstránené krížové znečistenie (`hiking.sk` bolo predtým aj v BikeAgent zozname)
 
 ### Fixed
 - Klikateľné zdroje — validácia URL cez `new URL()`, neplatné hodnoty zobrazené ako `<span>`
@@ -26,6 +31,9 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **XSS v `/history`** — polia `ip` a `status` sa vypisovali do HTML bez escapovania, `location` sa escapovalo len čiastočne (len `<`); teraz jedna `esc()` funkcia pre všetky interpolované polia
 - Dockerfile: `node:20-alpine` → `node:20-bookworm-slim` (glibc) — Alpine musl chýba symbol `fcntl64`, `better-sqlite3` nešlo natívne nabootovať
 - Dockerfile: explicitný `node-gyp` rebuild namiesto spoliehania na `prebuild-install` (sťahoval binárku s nesedícou Node ABI verziou)
+- **PWA neaktualizovala už otvorenú záložku pri novom nasadení** — service worker sa na pozadí aktivoval (`skipWaiting`/`clientsClaim`), ale bežiaci JS v pamäti ostal starý; `registerSW()` teraz pri `onNeedRefresh` automaticky reloadne stránku
+- **CSP regresia na `/history`** — `script-src 'self'` (bez `unsafe-inline`) ticho blokovala inline `<script>` aj `onclick`/`oninput`/`onchange` handlery, čím boli prepínanie záložiek aj filtre nefunkčné od zavedenia CSP; JS presunutý do `frontend/public/history.js` s `addEventListener` namiesto oslabenia CSP
+- **Mapa (Leaflet) sa neprekresľovala pri prepnutí na iný výsledok z histórie** — `RouteMap` inicializovala mapu len raz (`useEffect` s prázdnym dependency array + guard), pri kliknutí na iný záznam z "Nedávne" v tej istej relácii zostala zaseknutá na pôvodnej lokalite; pridaný `key={location-centerLat-centerLng}` vynucuje remount pri zmene výsledku
 
 ### Security
 - **Odstránený `API_SECRET_TOKEN`/`VITE_API_SECRET_TOKEN` úplne** — bol zapečený vo verejnom frontend bundli (viditeľný v DevTools), reálna ochrana teraz ide cez server-side limity a kvóty vyššie

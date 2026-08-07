@@ -178,7 +178,10 @@ Caddy-docker-proxy zaregistruje kontajner a app je dostupná na doméne nastaven
 
 `/history` je chránený priamo na úrovni Caddy (`basic_auth`, path-scoped len na `/history*`) — v prehliadači sa zobrazí natívny prihlasovací dialóg, prihlásiš sa menom a heslom nastaveným cez `HISTORY_PASSWORD_HASH`.
 
-Zobrazuje: čas, IP, lokalita, počet vyhľadávaní, tokeny, trvanie, status (ok/error).
+Dve záložky:
+
+- **História** — čas, IP, lokalita, počet vyhľadávaní, tokeny, trvanie, status (ok/error), s filtrami
+- **Kvóty a náklady** — globálny denný limit s progress barom (`X / MAX_GLOBAL_REQUESTS_PER_DAY`), per-IP breakdown za dnešok (počet požiadaviek/limit na IP, vyhľadávania, tokeny, odhadovaná útrata v $)
 
 **Retencia:** záznamy staršie ako `HISTORY_RETENTION_DAYS` (default 90 dní) sa automaticky mažú pri štarte appky a potom každých 24 hodín.
 

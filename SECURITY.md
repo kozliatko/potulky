@@ -40,7 +40,7 @@ na serveri, nie na klientovi:
 - **Denné kvóty** — `MAX_REQUESTS_PER_IP_PER_DAY` (default 15, → `429`), `MAX_GLOBAL_REQUESTS_PER_DAY` (default 300, → `503`)
 - **`/history`** chránené výhradne cez Caddy `basic_auth` (path-scoped na `/history*`, bcrypt hash v `.env`) — appka nie je zvonka dosiahnuteľná bez Caddy (žiadny `ports:` mapping)
 - **XSS prevencia** — všetky interpolované polia v `/history` HTML výstupe (ip, location, status) sú escapované
-- **CSP + bezpečnostné hlavičky** cez Caddy (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Content-Security-Policy`)
+- **CSP + bezpečnostné hlavičky** cez Caddy (`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Content-Security-Policy`) — bez `unsafe-inline` v `script-src`, vrátane `/history` (JS v samostatnom súbore `frontend/public/history.js`)
 - **Retencia dát** — záznamy histórie staršie ako `HISTORY_RETENTION_DAYS` (default 90 dní) sa automaticky mažú
 - **CORS** obmedzené na produkčnú doménu (`CORS_ORIGIN`)
 - **Generické chybové hlásenia** klientovi — interné detaily (`err.message`) idú len do serverových logov
