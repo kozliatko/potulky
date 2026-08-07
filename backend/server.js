@@ -5,14 +5,12 @@ import OpenAI from "openai";
 import path from "path";
 import { fileURLToPath } from "url";
 import { insertSearch, getHistory, getStats } from "./db.js";
+import { buildPrompt } from "./prompts.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
-
-if (process.env.NODE_ENV === "production" && !process.env.API_SECRET_TOKEN) {
-  throw new Error("API_SECRET_TOKEN musí byť nastavený v produkcii.");
-}
+const MAX_TOKENS = 8000;
 
 app.set("trust proxy", 1);
 
@@ -62,10 +60,10 @@ const TOOLS = [
 ];
 
 // ─── Agentic loop ─────────────────────────────────────────────────────────────
-async function runAgent({ system, messages, max_tokens }) {
+async function runAgent({ system, userMessage }) {
   const history = [
     { role: "system", content: system },
-    ...messages,
+    { role: "user", content: userMessage },
   ];
 
   let inputTokens  = 0;
@@ -75,7 +73,7 @@ async function runAgent({ system, messages, max_tokens }) {
   for (let i = 0; i < 25; i++) {
     const response = await deepseek.chat.completions.create({
       model: "deepseek-chat",
-      max_tokens: max_tokens || 8000,
+      max_tokens: MAX_TOKENS,
       tools: TOOLS,
       tool_choice: "auto",
       messages: history,
@@ -142,16 +140,6 @@ const apiLimiter = rateLimit({
 });
 app.use("/api/", apiLimiter);
 
-const authMiddleware = (req, res, next) => {
-  if (!process.env.API_SECRET_TOKEN) return next();
-  const token = req.headers["x-api-token"];
-  if (token !== process.env.API_SECRET_TOKEN) {
-    console.warn(`[Auth] 401 – nesprávny x-api-token | IP: ${req.ip} | path: ${req.path}`);
-    return res.status(401).json({ error: "Neoprávnený prístup." });
-  }
-  next();
-};
-
 // ─── Statické súbory frontendu ───────────────────────────────────────────────
 const publicDir = path.join(__dirname, "public");
 app.use(express.static(publicDir));
@@ -161,25 +149,22 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-app.post("/api/messages", authMiddleware, async (req, res) => {
+app.post("/api/messages", async (req, res) => {
   const start = Date.now();
   const ip = req.ip;
   const userAgent = req.headers["user-agent"] || null;
 
+  const { mode, profile, location: rawLocation } = req.body || {};
+  const prompt = buildPrompt(mode, profile, rawLocation);
+  if (!prompt) {
+    return res.status(400).json({ error: "Neplatná požiadavka — chýba alebo je neplatné mode/location." });
+  }
+
   try {
-    const { system, messages, max_tokens } = req.body;
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: "Chýba pole messages." });
-    }
-
-    const lastUserMsg = [...messages].reverse().find(m => m.role === "user")?.content || "";
-    const locationMatch = lastUserMsg.match(/v\s+okol[íi][:：]\s*(.+?)(?:\.|$)/i);
-    const location = locationMatch ? locationMatch[1].trim() : lastUserMsg.slice(0, 120) || null;
-
-    const { text, usage } = await runAgent({ system, messages, max_tokens });
+    const { text, usage } = await runAgent({ system: prompt.system, userMessage: prompt.userMessage });
 
     insertSearch.run(
-      ip, userAgent, location,
+      ip, userAgent, prompt.location,
       usage.searchCount, usage.inputTokens, usage.outputTokens,
       Date.now() - start, "ok", null
     );
@@ -187,14 +172,11 @@ app.post("/api/messages", authMiddleware, async (req, res) => {
     res.json({ content: [{ type: "text", text }], usage });
   } catch (err) {
     console.error("[DeepSeek Error]", err.message);
-    const lastUserMsg = (req.body?.messages || []).reverse().find(m => m.role === "user")?.content || "";
-    const locationMatch = lastUserMsg.match(/v\s+okol[íi][:：]\s*(.+?)(?:\.|$)/i);
     insertSearch.run(
-      ip, userAgent,
-      locationMatch ? locationMatch[1].trim() : lastUserMsg.slice(0, 120) || null,
+      ip, userAgent, prompt.location,
       0, 0, 0, Date.now() - start, "error", err.message?.slice(0, 255)
     );
-    res.status(500).json({ error: err.message || "Interná chyba servera." });
+    res.status(500).json({ error: "Interná chyba servera." });
   }
 });
 
@@ -340,7 +322,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   app.listen(PORT, () => {
     console.log(`✅ BikeAgent (DeepSeek) beží na porte ${PORT}`);
     console.log(`   NODE_ENV: ${process.env.NODE_ENV || "development"}`);
-    if (process.env.API_SECRET_TOKEN) console.log(`   Auth token: aktívny`);
   });
 }
 

@@ -16,77 +16,6 @@ function profileIcons({ hasEbike, hasChildren, hasTrailer }) {
   return [hasEbike && "⚡", hasChildren && "👧", hasTrailer && "🛻"].filter(Boolean).join("");
 }
 
-function buildSystemPrompt({ hasEbike, hasChildren, hasTrailer }) {
-  const lines = [];
-
-  lines.push("SKLADBA SKUPINY:");
-  lines.push(`- Dospelí jazdia na ${hasEbike ? "ELEKTROBICIYKLOCH (e-bike) — zvládnu väčšie prevýšenie a dlhšie trasy bez únavy" : "bežných bicykloch — treba dbať na prevýšenie a celkovú náročnosť trasy"}`);
-  if (hasChildren && hasTrailer) {
-    lines.push("- Jedno dieťa ide na vlastnom detskom bicykli — trasa musí byť bezpečná a zvládnuteľná aj pre dieťa samostatne");
-    lines.push("- Druhé dieťa je v PRÍVESNOM VOZÍKU — kritické požiadavky: šírka chodníka min. 1,5 m, hladký povrch bez výmoľov, žiadne ostré zákruty, schodíky ani rampy");
-  } else if (hasChildren) {
-    lines.push("- Deti idú na vlastných detských bicykloch — trasy musia byť bezpečné, s miernym sklonom a zvládnuteľné pre deti");
-  }
-
-  const groupDesc = !hasChildren
-    ? "cyklistov"
-    : hasTrailer
-    ? "e-bike rodinu s deťmi a prívesným vozíkom"
-    : hasEbike
-    ? "e-bike rodinu s deťmi"
-    : "rodinu s deťmi";
-
-  return `Si špecializovaný agent pre hľadanie cyklociest. Tvoja úloha je nájsť ideálne trasy pre: ${groupDesc}.
-
-${lines.join("\n")}
-
-LIMIT VYHĽADÁVANÍ: Použi MAXIMÁLNE 10 web_search volaní celkovo. Buď efektívny — kombinuj viac otázok do jedného dotazu.
-
-1. Vyhľadaj cyklotrasy v zadanej lokalite pomocou web_search nástroja (2-3 vyhľadávania)
-2. Hľadaj VÝLUČNE asfaltové alebo spevnené povrchy (nie terénne trail trasy)
-3. Over trasy z dostupných zdrojov (mapy.cz, cycling.sk, bikemap.net, alltrails.com, komoot.com, hiking.sk, openstreetmap — max 3-4 ďalšie vyhľadávania)
-4. KRITICKY zhodnoť každú trasu:
-   - Bezpečnosť (intenzita premávky, cyklopruhy, oddelenie od áut)${hasTrailer ? "\n   - Vhodnosť pre prívesný vozík (šírka min. 1,5m, povrch, prechodnosť)" : ""}${hasChildren ? "\n   - Náročnosť pre deti na bicykli (prevýšenie, sklon)" : ""}
-   - Povrch (asfalt = výborný, spevnená cesta = dobrý, makadám = akceptovateľný)
-   - Dĺžka (${hasChildren ? "reálna pre deti: 5–30 km" : "5–60 km"}; ${hasEbike ? "e-bike zvládne aj dlhšie trasy" : "zohľadni fyzickú náročnosť"})
-   - Preferuj dedikované trasy bez áut
-5. Vyhľadaj zaujímavosti do 10 km od trás (1-2 vyhľadávania — kombinuj viaceré trasy do jedného dotazu)
-6. Odporuč TOP 3–5 trás
-7. Pre každú trasu uveď presné GPS súradnice štartu (startLat, startLng) a celkové centrum oblasti (centerLat, centerLng)
-8. Odpovedaj výlučne po slovensky
-
-DÔLEŽITÉ: Odpoveď vráť VÝLUČNE ako čistý JSON objekt bez akýchkoľvek markdown backticks ani vysvetlení:
-{
-  "summary": "Krátky prehľad cyklomožností v danej lokalite (2-3 vety)",
-  "centerLat": 48.736,
-  "centerLng": 19.146,
-  "routes": [
-    {
-      "name": "Názov trasy",
-      "distance": "X km",
-      "surface": "Asfalt / Spevnená cesta / Zmiešaný",
-      "difficulty": "Ľahká / Stredná / Ťažká",
-      "elevation": "X m prevýšenia",
-      "highlights": "Čo je zaujímavé na trase",${hasTrailer ? '\n      "trailerFriendly": "Áno / Čiastočne / Nie — dôvod",' : ""}${hasChildren ? '\n      "childFriendlyScore": 8,' : ""}
-      "startLat": 48.736,
-      "startLng": 19.146,
-      "sources": ["https://...", "https://..."],
-      "warnings": "Prípadné upozornenia alebo null",
-      "recommendation": "Prečo túto trasu odporúčam pre ${groupDesc}",
-      "pointsOfInterest": [
-        {
-          "name": "Názov zaujímavosti",
-          "type": "hrad / ihrisko / kúpalisko / reštaurácia / príroda / múzeum / rozhľadňa",
-          "distance": "X km od trasy",
-          "description": "Krátky popis"
-        }
-      ]
-    }
-  ],
-  "generalTips": "Všeobecné tipy pre ${groupDesc} v tejto oblasti"
-}`;
-}
-
 // ─── Hlavný komponent ────────────────────────────────────────────────────────
 export default function BikeAgent() {
   const [location, setLocation] = useState("");
@@ -170,30 +99,10 @@ export default function BikeAgent() {
       const t1 = setTimeout(() => setPhase("verifying"),  5000);
       const t2 = setTimeout(() => setPhase("analyzing"),  11000);
 
-      const headers = { "Content-Type": "application/json" };
-      if (import.meta.env.VITE_API_SECRET_TOKEN) {
-        headers["x-api-token"] = import.meta.env.VITE_API_SECRET_TOKEN;
-      }
-
-      const groupDesc = !profile.hasChildren
-        ? "cyklistov"
-        : profile.hasTrailer
-        ? "e-bike rodinu s deťmi a prívesným vozíkom"
-        : profile.hasEbike
-        ? "e-bike rodinu s deťmi"
-        : "rodinu s deťmi";
-
       const response = await fetch(API_URL, {
         method:  "POST",
-        headers,
-        body: JSON.stringify({
-          max_tokens: 8000,
-          system:     buildSystemPrompt(profile),
-          messages:   [{
-            role:    "user",
-            content: `Nájdi cyklotrasy pre ${groupDesc} v okolí: ${location}. Nezabudni na GPS súradnice každej trasy a centrum oblasti.`,
-          }],
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "bike", profile, location }),
       });
 
       clearTimeout(t1); clearTimeout(t2);

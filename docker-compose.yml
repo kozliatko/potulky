@@ -4,8 +4,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        - VITE_API_SECRET_TOKEN=${VITE_API_SECRET_TOKEN}
     container_name: cyclo-agent
     restart: unless-stopped
     env_file: .env

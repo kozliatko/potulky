@@ -61,49 +61,36 @@ describe("Frontend statické súbory", () => {
 });
 
 // ─── API validácia ────────────────────────────────────────────────────────────
-// Ak je API_SECRET_TOKEN aktívny, auth prebehne skôr ako validácia → 401 je tiež správna.
+// Server sám skladá system prompt (mode + profile); klient neposiela system/messages/max_tokens.
 
 describe("POST /api/messages — validácia vstupu", () => {
-  it("vracia 400 alebo 401 keď chýba telo požiadavky", async () => {
+  it("vracia 400 keď chýba telo požiadavky", async () => {
     const res = await get("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{}",
     });
-    assert.ok([400, 401].includes(res.status), `Očakávaný 400/401, dostal ${res.status}`);
+    assert.equal(res.status, 400);
     const body = await res.json();
     assert.ok(body.error, "Musí obsahovať pole error");
   });
 
-  it("vracia 400 alebo 401 keď messages nie je pole", async () => {
+  it("vracia 400 pri neplatnom mode", async () => {
     const res = await get("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: "neplatne" }),
+      body: JSON.stringify({ mode: "neexistuje", location: "Trenčín" }),
     });
-    assert.ok([400, 401].includes(res.status), `Očakávaný 400/401, dostal ${res.status}`);
+    assert.equal(res.status, 400);
   });
-});
 
-// ─── API auth ────────────────────────────────────────────────────────────────
-
-describe("POST /api/messages — auth (len keď API_SECRET_TOKEN je nastavený)", () => {
-  it("vracia 401 pri nesprávnom tokene keď auth je aktívna", async () => {
+  it("vracia 400 keď chýba location", async () => {
     const res = await get("/api/messages", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-token": "zly-token-xyz",
-      },
-      body: JSON.stringify({ messages: [{ role: "user", content: "test" }] }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "bike" }),
     });
-    // Ak auth nie je nastavená, server vráti 400 (chýba obsah) alebo 200, nie 401.
-    // Ak je nastavená, musí vrátiť 401.
-    assert.ok([400, 401, 200].includes(res.status), `Neočakávaný status: ${res.status}`);
-    if (res.status === 401) {
-      const body = await res.json();
-      assert.ok(body.error, "401 musí obsahovať pole error");
-    }
+    assert.equal(res.status, 400);
   });
 });
 

@@ -24,72 +24,6 @@ function groupDesc({ hasChildren, hasStroller, hasSeniors }) {
   return "turistov";
 }
 
-function buildSystemPrompt(profile) {
-  const { hasChildren, hasStroller, hasSeniors } = profile;
-  const desc = groupDesc(profile);
-  const lines = [];
-
-  lines.push("SKLADBA SKUPINY:");
-  if (hasStroller) {
-    lines.push("- Malé dieťa v KOČÍKU alebo VOZÍČKU — KRITICKÉ: výlučne spevnený povrch (asfalt alebo hrubý štrk), šírka chodníka min. 1,5 m, sklon max. 8 %, žiadne schody, schodíky ani úzke priechody");
-  } else if (hasChildren) {
-    lines.push("- Deti idú pešo — trasy musia byť krátke, bezpečné, s nenáročným terénom a zaujímavými zastávkami");
-  }
-  if (hasSeniors) {
-    lines.push("- Seniori v skupine — preferovať mierny terén, kratšie trasy s dostatkom lavičiek a oddychových bodov");
-  }
-
-  return `Si špecializovaný agent pre hľadanie turistických trás, náučných chodníkov a prírodných vychádzok. Tvoja úloha je nájsť ideálne trasy pre: ${desc}.
-
-${lines.join("\n")}
-
-LIMIT VYHĽADÁVANÍ: Použi MAXIMÁLNE 10 web_search volaní celkovo. Buď efektívny — kombinuj viac otázok do jedného dotazu.
-
-1. Vyhľadaj turistické chodníky, náučné trasy a vycházkové okruhy v zadanej lokalite (2–3 vyhľadávania)
-2. Hľadaj trasy vhodné pre skupinu — prioritou sú spevnené chodníky, náučné okruhy, parky, prírodné rezervácie${hasStroller ? "\n3. PRE KOČÍK: overuj výlučne povrch (asfalt/spevnená cesta), šírku (min. 1,5 m) a sklon (max. 8 %)" : ""}
-${hasStroller ? "4" : "3"}. Over trasy na hiking.sk, hiking.dennikn.sk, mapy.cz (turistický mód), turistika.sk, komoot.com a openstreetmap (max 3–4 vyhľadávania)
-${hasStroller ? "5" : "4"}. KRITICKY zhodnoť každú trasu:
-   - Typ povrchu a prechodnosť${hasStroller ? " pre kočík (spevnený = výborný, štrk = podmienečne, lesný chodník = nevhodný)" : ""}
-   - Náročnosť: dĺžka, prevýšenie, čas chôdze${hasChildren ? "\n   - Vhodnosť a bezpečnosť pre deti" : ""}${hasSeniors ? "\n   - Dostupnosť lavičiek, oddychových miest, toaliet" : ""}
-   - Zaujímavosť trasy (príroda, história, výhľady, zábava pre deti)
-${hasStroller ? "6" : "5"}. Vyhľadaj POI: ihriská, vyhliadky, hrady, reštaurácie, oddychové miesta (1–2 vyhľadávania)
-${hasStroller ? "7" : "6"}. Odporuč TOP 3–5 trás
-${hasStroller ? "8" : "7"}. Pre každú trasu uveď presné GPS súradnice štartu (startLat, startLng) a centrum oblasti (centerLat, centerLng)
-${hasStroller ? "9" : "8"}. Odpovedaj výlučne po slovensky
-
-DÔLEŽITÉ: Odpoveď vráť VÝLUČNE ako čistý JSON objekt bez akýchkoľvek markdown backticks ani vysvetlení:
-{
-  "summary": "Krátky prehľad turistických možností v danej lokalite (2-3 vety)",
-  "centerLat": 48.736,
-  "centerLng": 19.146,
-  "routes": [
-    {
-      "name": "Názov trasy",
-      "distance": "X km",
-      "walkingTime": "X hod Y min",
-      "terrain": "Asfalt / Spevnená cesta / Lesný chodník / Zmiešaný",
-      "difficulty": "Ľahká / Stredná / Ťažká",
-      "elevation": "X m prevýšenia",
-      "highlights": "Čo je zaujímavé na trase",${hasStroller ? '\n      "strollerFriendly": "Áno / Čiastočne / Nie — dôvod",' : ""}${hasChildren ? '\n      "childFriendlyScore": 8,' : ""}
-      "footwearTip": "Odporúčaná obuv (napr. trekingová obuv / pohodlná obuv / gumáky)",
-      "startLat": 48.736,
-      "startLng": 19.146,
-      "sources": ["https://...", "https://..."],
-      "warnings": "Prípadné upozornenia alebo null",
-      "recommendation": "Prečo túto trasu odporúčam pre ${desc}",
-      "pointsOfInterest": [
-        {
-          "name": "Názov zaujímavosti",
-          "type": "hrad / ihrisko / kúpalisko / reštaurácia / príroda / múzeum / rozhľadňa",
-          "distance": "X km od trasy",
-          "description": "Krátky popis"
-        }
-      ]
-    }
-  ],
-  "generalTips": "Všeobecné tipy pre ${desc} v tejto oblasti"
-}`;
-}
 
 // ─── Hlavný komponent ────────────────────────────────────────────────────────
 export default function HikeAgent() {
@@ -174,24 +108,10 @@ export default function HikeAgent() {
       const t1 = setTimeout(() => setPhase("verifying"),  5000);
       const t2 = setTimeout(() => setPhase("analyzing"),  11000);
 
-      const headers = { "Content-Type": "application/json" };
-      if (import.meta.env.VITE_API_SECRET_TOKEN) {
-        headers["x-api-token"] = import.meta.env.VITE_API_SECRET_TOKEN;
-      }
-
-      const desc = groupDesc(profile);
-
       const response = await fetch(API_URL, {
         method:  "POST",
-        headers,
-        body: JSON.stringify({
-          max_tokens: 8000,
-          system:     buildSystemPrompt(profile),
-          messages:   [{
-            role:    "user",
-            content: `Nájdi turistické trasy a vychádzky pre ${desc} v okolí: ${location}. Nezabudni na GPS súradnice každej trasy a centrum oblasti.`,
-          }],
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "hike", profile, location }),
       });
 
       clearTimeout(t1); clearTimeout(t2);
