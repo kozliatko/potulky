@@ -326,7 +326,10 @@ export default function BikeAgent() {
           )}
 
           {result.centerLat && result.centerLng && (
-            <RouteMap routes={result.routes || []} centerLat={result.centerLat} centerLng={result.centerLng} location={location} />
+            <RouteMap
+              key={`${location}-${result.centerLat}-${result.centerLng}`}
+              routes={result.routes || []} centerLat={result.centerLat} centerLng={result.centerLng} location={location}
+            />
           )}
 
           {/* Taby */}
