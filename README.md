@@ -300,11 +300,23 @@ potulky/
 **`/history` pýta prihlásenie, ktoré neuznáva heslo**
 → Over `HISTORY_PASSWORD_HASH` v `.env` — musí byť platný bcrypt hash z `caddy hash-password`, nie plaintext heslo.
 
+**`429 Too Many Requests` / `503 Service Unavailable`**
+→ Prekročená denná kvóta (`MAX_REQUESTS_PER_IP_PER_DAY` na IP, `MAX_GLOBAL_REQUESTS_PER_DAY` globálne). Aktuálne čerpanie je vidieť v `/history` na záložke **Kvóty a náklady**, limity sa resetujú o polnoci UTC.
+
 ---
 
 ## Changelog
 
 Pozri [CHANGELOG.md](CHANGELOG.md) pre kompletnú históriu zmien.
+
+### v2.1.0
+- **Bezpečnostná prestavba**: server-side prompt building (klient už neposiela `system`/`messages`/`max_tokens`), odstránený `API_SECRET_TOKEN` (bol viditeľný vo verejnom bundli)
+- Denné kvóty (per-IP aj globálne) a retencia dát (`HISTORY_RETENTION_DAYS`)
+- `/history` chránený Caddy `basic_auth`, nová záložka **Kvóty a náklady**
+- CSP + bezpečnostné hlavičky cez Caddy `caddy.header.*` labely
+- Opravené: XSS v `/history`, PWA neaktualizovala otvorenú záložku, mapa sa neprekresľovala pri zmene výsledku, CSP regresia blokujúca `/history` UI
+- CI: GitHub Actions (testy, build, gitleaks, npm audit, Codecov)
+- Odstránené legacy `nginx.conf`/`Dockerfile.dev`/`docker-compose.dev.yml` a nepoužívaná `@anthropic-ai/sdk` závislosť
 
 ### v2.0.0
 - Premenovaný projekt: BikeAgent → Potulky

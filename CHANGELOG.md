@@ -7,8 +7,9 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-### Removed
-- `@anthropic-ai/sdk` z `backend/package.json` — nepoužívaná závislosť z prvého commitu (éra Claude Haiku), projekt beží na DeepSeek V3 cez `openai` SDK už od v1.0.0
+---
+
+## [2.1.0] — 2026-08-07
 
 ### Added
 - Globálny rate limiter (120 req/min) pred API-špecifickým (20 req/min)
@@ -48,6 +49,7 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `caddy/Caddyfile` a `caddy/Dockerfile` — nahradené caddy-docker-proxy labelmi
 - `certs/` adresár — certifikáty nepatria do repozitára
 - Legacy `frontend/nginx.conf`, `frontend/Dockerfile(.dev)`, `backend/Dockerfile(.dev)`, `docker-compose.dev.yml` — pochádzali z prvého commitu, nikdy neboli aktualizované na súčasnú architektúru
+- `@anthropic-ai/sdk` z `backend/package.json` — nepoužívaná závislosť z prvého commitu (éra Claude Haiku), projekt beží na DeepSeek V3 cez `openai` SDK už od v1.0.0
 
 ---
 
