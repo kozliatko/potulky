@@ -181,7 +181,7 @@ Caddy-docker-proxy zaregistruje kontajner a app je dostupná na doméne nastaven
 
 ## História vyhľadávaní
 
-`/history` je chránený priamo na úrovni Caddy (`basic_auth`, path-scoped len na `/history*`) — v prehliadači sa zobrazí natívny prihlasovací dialóg, prihlásiš sa menom a heslom nastaveným cez `HISTORY_PASSWORD_HASH`.
+`/history` je chránený priamo na úrovni Caddy (`basic_auth`, path-scoped na presnú zhodu `/history` — nie prefix `/history*`, ktorý by chytil aj statický `/history.js`) — v prehliadači sa zobrazí natívny prihlasovací dialóg, prihlásiš sa menom a heslom nastaveným cez `HISTORY_PASSWORD_HASH`.
 
 Dve záložky:
 
