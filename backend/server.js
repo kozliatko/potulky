@@ -159,6 +159,7 @@ app.post("/api/messages", async (req, res) => {
   const { mode, profile, location: rawLocation } = req.body || {};
   const prompt = buildPrompt(mode, profile, rawLocation);
   if (!prompt) {
+    console.warn(`[Invalid] 400 – neplatné mode/location | IP: ${ip} | mode: ${mode} | body keys: ${Object.keys(req.body || {}).join(",")}`);
     return res.status(400).json({ error: "Neplatná požiadavka — chýba alebo je neplatné mode/location." });
   }
 
