@@ -2,6 +2,7 @@
 
 [![Build & Test](https://github.com/kozliatko/potulky/actions/workflows/build.yml/badge.svg)](https://github.com/kozliatko/potulky/actions/workflows/build.yml)
 [![Security](https://github.com/kozliatko/potulky/actions/workflows/security.yml/badge.svg)](https://github.com/kozliatko/potulky/actions/workflows/security.yml)
+[![CodeQL](https://github.com/kozliatko/potulky/actions/workflows/codeql.yml/badge.svg)](https://github.com/kozliatko/potulky/actions/workflows/codeql.yml)
 [![codecov](https://codecov.io/gh/kozliatko/potulky/branch/main/graph/badge.svg?token=vASvrvjFQs)](https://codecov.io/gh/kozliatko/potulky)
 [![Snyk](https://snyk.io/test/github/kozliatko/potulky/badge.svg)](https://snyk.io/test/github/kozliatko/potulky)
 ![Node.js](https://img.shields.io/badge/Node.js-20-339933?logo=node.js&logoColor=white)
