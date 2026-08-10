@@ -1,5 +1,5 @@
 # ── Stage 1: Build React frontend ─────────────────────────────────────────────
-FROM node:20-bookworm-slim AS frontend-builder
+FROM node:26-bookworm-slim AS frontend-builder
 
 WORKDIR /frontend
 COPY frontend/package*.json ./
@@ -9,7 +9,7 @@ COPY frontend/ .
 RUN npm run build
 
 # ── Stage 2: Backend deps (kompilácia better-sqlite3) ─────────────────────────
-FROM node:20-bookworm-slim AS backend-builder
+FROM node:26-bookworm-slim AS backend-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -25,7 +25,7 @@ RUN rm -rf node_modules/better-sqlite3/build \
     && node /usr/local/lib/node_modules/npm/node_modules/node-gyp/bin/node-gyp.js rebuild --release
 
 # ── Stage 3: Finálny image ────────────────────────────────────────────────────
-FROM node:20-bookworm-slim
+FROM node:26-bookworm-slim
 
 WORKDIR /app
 COPY --from=backend-builder /app/node_modules ./node_modules
