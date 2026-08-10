@@ -14,6 +14,7 @@
 ![PWA](https://img.shields.io/badge/PWA-5A0FC8?logo=pwa&logoColor=white)
 ![Last commit](https://img.shields.io/github/last-commit/kozliatko/potulky)
 ![License](https://img.shields.io/github/license/kozliatko/potulky)
+![Version](https://img.shields.io/github/v/release/kozliatko/potulky)
 
 AI agent pre hľadanie rodinných cyklociest a turistických trás. Podľa zadanej lokality (alebo GPS polohy) a parametrov vyhľadá vhodné trasy, zobrazí ich na mape a pridá predpoveď počasia.
 Hobby projekt pre vlastnú potrebu robený po večeroch počas venčenia psa.
