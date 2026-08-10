@@ -29,9 +29,9 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      - name: Coverage provider (bez zmeny lockfile)
+      - name: Coverage provider (verzia zhodná s nainštalovaným vitest, bez zmeny lockfile)
         working-directory: backend
-        run: npm install --no-save @vitest/coverage-v8@^2.0.0
+        run: npm install --no-save @vitest/coverage-v8@"$(node -p "require('vitest/package.json').version")"
 
       - name: npm test (s coverage)
         working-directory: backend
@@ -66,9 +66,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Coverage provider (bez zmeny lockfile)
+      - name: Coverage provider (verzia zhodná s nainštalovaným vitest, bez zmeny lockfile)
         working-directory: frontend
-        run: npm install --no-save @vitest/coverage-v8@^2.0.0
+        run: npm install --no-save @vitest/coverage-v8@"$(node -p "require('vitest/package.json').version")"
 
       - name: npm test (s coverage)
         working-directory: frontend
