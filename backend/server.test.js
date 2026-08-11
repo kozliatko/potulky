@@ -6,9 +6,13 @@ process.env.DB_PATH = ":memory:";
 const { createMock } = vi.hoisted(() => ({ createMock: vi.fn() }));
 
 vi.mock("openai", () => ({
-  default: vi.fn(() => ({
-    chat: { completions: { create: createMock } },
-  })),
+  // vitest 4: mock vytvorený cez vi.fn(arrow fn) už nie je constructovateľný
+  // (server.js volá `new OpenAI(...)`) — obyčajná trieda funguje v oboch verziách
+  default: class {
+    constructor() {
+      this.chat = { completions: { create: createMock } };
+    }
+  },
 }));
 
 const { default: app } = await import("./server.js");
