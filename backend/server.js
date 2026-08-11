@@ -359,7 +359,9 @@ app.use("/api/", (req, res) => {
   res.status(404).json({ error: "Endpoint nenájdený." });
 });
 
-app.get("*", (req, res) => {
+// Express 5 / path-to-regexp v8: holé "*" už nie je platný vzor cesty,
+// pomenovaný wildcard v zložených zátvorkách zachytáva aj koreň "/"
+app.get("/{*splat}", (req, res) => {
   res.sendFile(path.join(publicDir, "index.html"));
 });
 
