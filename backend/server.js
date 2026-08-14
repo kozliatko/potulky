@@ -81,7 +81,7 @@ async function runAgent({ system, userMessage }) {
 
   for (let i = 0; i < 25; i++) {
     const response = await deepseek.chat.completions.create({
-      model: "deepseek-chat",
+      model: "deepseek-v4-flash",
       max_tokens: MAX_TOKENS,
       tools: TOOLS,
       tool_choice: "auto",
