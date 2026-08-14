@@ -7,6 +7,10 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [2.1.1] — 2026-08-14
+
 ### Fixed
 - **Frontend testy padali na Node 26 — `localStorage.clear() → Cannot read properties of undefined`** — Node 26 zaviedol natívny globálny `localStorage` (Web Storage API, funkčný len s `--localstorage-file`), ktorý bez tohto flagu tichmo prekryje `localStorage` poskytovaný jsdom test prostredím. `frontend/package.json`: test skript beží s `NODE_OPTIONS=--no-experimental-webstorage`, nech testy použijú jsdom implementáciu ako predtým
 - **Produkčný Docker build bol rozbitý — `better-sqlite3@11.10.0` sa nedal skompilovať proti Node 26** — predošlý bump base image na `node:26-bookworm-slim` (Dockerfile) odhalil, že staršie `better-sqlite3` používa V8 API odstránené v novších V8 verziách (`v8::Object::GetPrototype`, `v8::Context::GetIsolate`, `PropertyCallbackInfo::This`) — `npm ci --omit=dev` v `backend-builder` stage zlyhával, takže akýkoľvek ďalší build produkčného image by padol. Bump na `better-sqlite3@13.0.3` (kompatibilné s aktuálnym V8) — overené kompletným `docker build` aj behom kontajnera (`/health` odpovedá)
@@ -21,6 +25,13 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `response_format: { type: "json_object" }` pri volaní DeepSeek API (`backend/server.js`) — vynucuje JSON výstup na úrovni API namiesto spoliehania sa výlučne na textovú inštrukciu v prompte (frontendový `jsonrepair` fallback ostáva ako druhá poistka)
 - **Viditeľný PWA update banner** — `registerType: "prompt"` + odstránené `skipWaiting`/`clientsClaim`, takže nová verzia korektne čaká vo "waiting" stave a `onNeedRefresh` sa spoľahlivo spustí; namiesto tichého reloadu (ktorý mohol zmazať rozpísaný vstup) appka zobrazí banner "Obnoviť teraz" s poistkou automatického reloadu po 60 s, ak si ho nikto nevšimne
 - Pravidelná kontrola aktualizácie (`registration.update()` každú hodinu + pri návrate appky z pozadia cez `visibilitychange`) — predtým sa kontrola spoliehala len na zriedkavé plné navigácie
+
+### Changed
+- Model DeepSeek premapovaný z `deepseek-chat` na `deepseek-v4-flash` (`backend/server.js`) — overené priamym API testom aj reálnym end-to-end behom
+- **Redizajn system promptov** (bike aj hike, `backend/prompts.js`) do jasnej sekciovanej štruktúry (`## SKUPINA`, `## BEZPEČNOSTNÉ PRAVIDLÁ`, `## POSTUP`, `## KRITÉRIÁ HODNOTENIA`, `## FORMÁT VÝSTUPU`) — povolené hodnoty polí (`difficulty` enum, `trailerFriendly`/`strollerFriendly` prefix, `childFriendlyScore` rozsah) sú teraz explicitne vypísané namiesto naznačenia príkladom; JSON kontrakt s frontendom sa nemenil
+
+### Fixed
+- Zastarané zmienky o Claude/Anthropic modeli v README badge a `CONTRIBUTING.md` (tabuľka vetiev opisovala dávno zlúčenú `deepseek` vetvu) — projekt beží na DeepSeek od v2.0.0
 
 ---
 

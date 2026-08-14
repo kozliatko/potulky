@@ -314,6 +314,12 @@ potulky/
 
 Pozri [CHANGELOG.md](CHANGELOG.md) pre kompletnú históriu zmien.
 
+### v2.1.1
+- Model DeepSeek premapovaný na `deepseek-v4-flash`
+- Guardrails proti prompt injection a halucináciám v system promptoch (bike aj hike) + `response_format: json_object` na DeepSeek volaní
+- Redizajn system promptov do sekciovanej štruktúry s explicitne definovanými povolenými hodnotami polí
+- Opravené: PWA testy na Node 26, Docker build s `better-sqlite3` na Node 26, CI Node verzia zjednotená s produkciou, PWA update banner, zastarané zmienky o Claude/Anthropic v dokumentácii
+
 ### v2.1.0
 - **Bezpečnostná prestavba**: server-side prompt building (klient už neposiela `system`/`messages`/`max_tokens`), odstránený `API_SECRET_TOKEN` (bol viditeľný vo verejnom bundli)
 - Denné kvóty (per-IP aj globálne) a retencia dát (`HISTORY_RETENTION_DAYS`)
