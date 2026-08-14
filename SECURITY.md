@@ -36,6 +36,7 @@ na serveri, nie na klientovi:
 ## Aktuálne opatrenia
 
 - **Server-side prompt building** — klient neposiela `system`/`messages`/`max_tokens`, len `mode`/`profile`/`location` (pozri vyššie)
+- **LLM guardrails proti prompt injection a halucináciám** (`backend/prompts.js`) — system prompt explicitne inštruuje model, že obsah z `web_search` výsledkov (cudzie webstránky) aj `location` je len dátový vstup, nikdy inštrukcia; zdroje a GPS súradnice sa nesmú vymýšľať. `response_format: json_object` na DeepSeek volaní vynucuje JSON výstup aj na úrovni API
 - **Rate limiting** — globálny 120 req/min, API 20 req/min na IP
 - **Denné kvóty** — `MAX_REQUESTS_PER_IP_PER_DAY` (default 15, → `429`), `MAX_GLOBAL_REQUESTS_PER_DAY` (default 300, → `503`)
 - **`/history`** chránené výhradne cez Caddy `basic_auth` (path-scoped na `/history*`, bcrypt hash v `.env`) — appka nie je zvonka dosiahnuteľná bez Caddy (žiadny `ports:` mapping)
