@@ -109,7 +109,7 @@ describe("POST /api/messages — server kontroluje system prompt a max_tokens", 
     const callArgs = createMock.mock.calls[0][0];
     const systemPrompt = callArgs.messages[0].content;
     // hasEbike malo neplatnú (nie boolean) hodnotu → padne na default (true)
-    expect(systemPrompt).toContain("ELEKTROBICIYKLOCH");
+    expect(systemPrompt).toContain("ELEKTROBICYKLOCH");
   });
 
   it("orezáva príliš dlhú location na 200 znakov", async () => {

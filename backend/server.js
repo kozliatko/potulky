@@ -85,6 +85,7 @@ async function runAgent({ system, userMessage }) {
       max_tokens: MAX_TOKENS,
       tools: TOOLS,
       tool_choice: "auto",
+      response_format: { type: "json_object" },
       messages: history,
     });
 
