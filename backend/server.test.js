@@ -94,7 +94,7 @@ describe("POST /api/messages — server kontroluje system prompt a max_tokens", 
     expect(callArgs.max_tokens).toBe(8000);
     expect(callArgs.messages[0].role).toBe("system");
     expect(callArgs.messages[0].content).not.toContain("pirát");
-    expect(callArgs.messages[0].content).toContain("cyklociest");
+    expect(callArgs.messages[0].content).toContain("cyklotrás");
   });
 
   it("ignoruje neznáme/škodlivé polia v profile a doplní defaulty", async () => {
