@@ -2,12 +2,7 @@
 
 ## Vetvy
 
-| Vetva      | Model         | Stav       |
-|------------|---------------|------------|
-| `main`     | Claude Sonnet | stabilná   |
-| `deepseek` | DeepSeek V3   | aktívna    |
-
-Vývoj prebieha na `deepseek`. Do `main` sa merguje len otestovaná verzia.
+Vývoj prebieha priamo na `main` (jediná vetva). AI model: **DeepSeek V3** cez OpenAI-kompatibilné SDK + Tavily Search.
 
 ## Lokálny vývoj
 

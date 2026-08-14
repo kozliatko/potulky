@@ -7,5 +7,6 @@ backend/data/
 *.db
 *.db-shm
 *.db-wal
+coverage/
 # TLS certifikáty — nikdy do gitu
 certs/

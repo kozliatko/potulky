@@ -10,7 +10,7 @@
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-4-000000?logo=express&logoColor=white)
-![Claude](https://img.shields.io/badge/Claude-AI-D97757?logo=anthropic&logoColor=white)
+![DeepSeek](https://img.shields.io/badge/DeepSeek-V3-4D6BFE?logo=deepseek&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-5A0FC8?logo=pwa&logoColor=white)
 ![Last commit](https://img.shields.io/github/last-commit/kozliatko/potulky)
 ![License](https://img.shields.io/github/license/kozliatko/potulky)
