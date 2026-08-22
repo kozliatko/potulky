@@ -256,9 +256,9 @@ export default function BaseAgent({ config }) {
         </div>
       )}
 
-      {/* Loading */}
+      {/* Loading — bez vstupnej animácie, nech sa zobrazí okamžite po kliku */}
       {isLoading && (
-        <div style={{ textAlign: "center", marginBottom: "2.5rem", animation: "fadeUp 0.4s ease" }}>
+        <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
           <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "1.1rem", background: "#fff", border: `1px solid ${theme.softBorder}`, borderRadius: "18px", padding: "1.8rem 2.5rem", boxShadow: `0 4px 20px ${theme.loadingBoxShadow}` }}>
             <div style={{ width: "34px", height: "34px", border: `3px solid ${theme.softBorder}`, borderTopColor: theme.accent, borderRadius: "50%", animation: "spin 0.85s linear infinite" }} />
             <p style={{ margin: 0, color: theme.accentDark, animation: "pulse 2s infinite", fontWeight: "500" }}>{phases[phaseIndex]}…</p>
@@ -313,6 +313,7 @@ export default function BaseAgent({ config }) {
               {profile.hasChildren && (
                 <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem", color: "#6b7280", cursor: "pointer" }}>
                   <input type="range" min={0} max={10} value={filters.minScore} onChange={e => setFilters(f => ({ ...f, minScore: +e.target.value }))}
+                    aria-label={`Minimálne skóre vhodnosti pre deti, aktuálne ${filters.minScore} z 10`}
                     style={{ width: "70px", accentColor: theme.accent }} />
                   👶 min {filters.minScore}/10
                 </label>
