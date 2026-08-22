@@ -20,9 +20,25 @@
     <!-- SEO -->
     <title>Potulky – Cyklotrasy & Turistika</title>
     <meta name="description" content="AI agent pre hľadanie cyklotrás a turistických vychádzok. Trasy na mieru pre rodiny s deťmi, kočíkom aj e-bike. Mapa, predpoveď počasia." />
+
+    <!-- Skeleton pre #root, kým sa nenačíta a nezmountuje React appka -->
+    <style>
+      #initial-skeleton {
+        min-height: 100vh;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+        background: linear-gradient(150deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdf4 100%);
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      #initial-skeleton .spinner {
+        width: 34px; height: 34px; border: 3px solid #d1fae5; border-top-color: #059669;
+        border-radius: 50%; animation: initial-skeleton-spin 0.85s linear infinite;
+      }
+      #initial-skeleton p { margin: 0; font-size: 0.9rem; color: #047857; }
+      @keyframes initial-skeleton-spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="initial-skeleton"><div class="spinner"></div><p>Načítavam Potulky…</p></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
