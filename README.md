@@ -52,8 +52,9 @@ cyclo-agent kontajner  (port 3001, interný)
    │
    ├── React/Vite frontend  (statické súbory servované Expressom z /public)
    │     ├── App.jsx              — prepínač módov Cyklistika / Turistika
-   │     ├── BikeAgent.jsx        — agent pre cyklotrasy
-   │     ├── HikeAgent.jsx        — agent pre turistiku a vychádzky
+   │     ├── BaseAgent.jsx        — zdieľaná logika a UI oboch agentov
+   │     ├── BikeAgent.jsx        — konfigurácia BaseAgent pre cyklotrasy
+   │     ├── HikeAgent.jsx        — konfigurácia BaseAgent pre turistiku a vychádzky
    │     └── shared.jsx           — RouteMap, WeatherForecast, GlobalStyles
    │
    └── SQLite  (/app/data/searches.db)
@@ -278,8 +279,9 @@ potulky/
     │   ├── main.jsx
     │   ├── App.jsx             # prepínač módov, GlobalStyles
     │   └── components/
-    │       ├── BikeAgent.jsx   # cyklotrasy
-    │       ├── HikeAgent.jsx   # turistika a vychádzky
+    │       ├── BaseAgent.jsx   # zdieľaná logika a UI (vyhľadávanie, GPS, filtre, história, výsledky)
+    │       ├── BikeAgent.jsx   # config pre BaseAgent — cyklotrasy
+    │       ├── HikeAgent.jsx   # config pre BaseAgent — turistika a vychádzky
     │       └── shared.jsx      # RouteMap, WeatherForecast, GlobalStyles, utils
     ├── public/                 # ikony (SVG, PNG, ICO)
     ├── index.html

@@ -7,6 +7,15 @@ Formát vychádza z [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+- **Frontend: zdieľaný `BaseAgent.jsx`** — `BikeAgent.jsx` a `HikeAgent.jsx` boli ~90 % identický kód (vyhľadávanie, GPS, filtre, história, rozloženie výsledkov); spoločná logika a UI presunuté do `BaseAgent.jsx`, oba pôvodné súbory sú teraz len konfiguračné (téma, profilové prepínače, polia trasy, externé odkazy). Vizuál a správanie nezmenené — overené automatizovaným porovnaním vyrenderovaného markupu so stavom pred refaktorom (idle, výsledky, disabled tlačidlo, equipment filter, GPS chyba)
+
+### Fixed
+- **GPS chyba prepínala celú obrazovku do error stavu** — zamietnutie geolokácie/timeout v BikeAgent aj HikeAgent už nenastavuje `phase="error"` (čo skrylo idle/search UI), ale zobrazí malú zatvoriteľnú notifikáciu; používateľ môže naďalej zadať lokalitu ručne
+
+### Added
+- **Tooltipy na profilových tlačidlách** (E-bike, Deti, Prívesný vozík / Kočík-vozík, Seniori) — `title` atribút s krátkym vysvetlením, čo prepínač mení na hodnotiacich kritériách
+
 ---
 
 ## [2.1.1] — 2026-08-14
