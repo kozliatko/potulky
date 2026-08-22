@@ -39,6 +39,7 @@ export default function HikeAgent() {
     try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); } catch { return []; }
   });
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError,   setGpsError]   = useState(null);
 
   const toggleProfile = key => setProfile(p => {
     const next = { ...p, [key]: !p[key] };
@@ -49,8 +50,9 @@ export default function HikeAgent() {
   const resetFilters = () => { setFilters({ difficulty: [], minScore: 0, strollerOnly: false }); setActiveTab(0); };
 
   const getLocation = async () => {
+    setGpsError(null);
     if (!navigator.geolocation) {
-      setError("Tvoj prehliadač nepodporuje geolokáciu."); setPhase("error"); return;
+      setGpsError("Tvoj prehliadač nepodporuje geolokáciu."); return;
     }
     setGpsLoading(true);
     try {
@@ -78,7 +80,7 @@ export default function HikeAgent() {
         err.code === 2 ? "Poloha nie je dostupná." :
         err.code === 3 ? "Vypršal čas na zistenie polohy." :
         `Nepodarilo sa zistiť polohu: ${err.message}`;
-      setError(msg); setPhase("error");
+      setGpsError(msg);
     } finally {
       setGpsLoading(false);
     }
@@ -179,17 +181,20 @@ export default function HikeAgent() {
       {/* Profil skupiny */}
       <div style={{ maxWidth: "640px", margin: "0 auto 1.4rem", display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center", animation: "fadeUp 0.5s ease 0.05s both" }}>
         {[
-          { key: "hasChildren", label: "👨‍👩‍👧 Deti",       depends: null },
-          { key: "hasStroller", label: "🚼 Kočík/vozík", depends: "hasChildren" },
-          { key: "hasSeniors",  label: "👴 Seniori",     depends: null },
-        ].map(({ key, label, depends }) => {
+          { key: "hasChildren", label: "👨‍👩‍👧 Deti",       depends: null,
+            desc: "Deti: trasy budú hodnotené podľa vhodnosti a bezpečnosti pre deti, vrátane zábavy a odpočinku." },
+          { key: "hasStroller", label: "🚼 Kočík/vozík", depends: "hasChildren",
+            desc: "Kočík/vozík: trasa musí mať spevnený povrch bez schodov a úzkych prechodov." },
+          { key: "hasSeniors",  label: "👴 Seniori",     depends: null,
+            desc: "Seniori: uprednostnia sa trasy s lavičkami, oddychovými miestami a toaletami." },
+        ].map(({ key, label, depends, desc }) => {
           const disabled = depends && !profile[depends];
           const active   = !disabled && profile[key];
           return (
             <button
               key={key}
               onClick={() => !disabled && toggleProfile(key)}
-              title={disabled ? "Najprv zapni Deti" : undefined}
+              title={disabled ? "Najprv zapni Deti" : desc}
               style={{
                 padding: "0.45rem 1.1rem", borderRadius: "20px", border: "1.5px solid",
                 borderColor: disabled ? "#e5e7eb" : active ? "#d97706" : "#fde68a",
@@ -258,6 +263,14 @@ export default function HikeAgent() {
           {isLoading ? "⏳ Pracujem…" : "🔍 Hľadaj"}
         </button>
       </div>
+
+      {/* GPS varovanie */}
+      {gpsError && (
+        <div style={{ maxWidth: "640px", margin: "-1.4rem auto 1.6rem", padding: "0.55rem 0.9rem", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", color: "#92400e", fontSize: "0.82rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.6rem", animation: "fadeUp 0.3s ease" }}>
+          <span>⚠️ {gpsError} Zadaj lokalitu ručne.</span>
+          <button onClick={() => setGpsError(null)} title="Zavrieť" style={{ background: "none", border: "none", color: "#92400e", cursor: "pointer", fontSize: "0.95rem", padding: 0, lineHeight: 1, flexShrink: 0 }}>✕</button>
+        </div>
+      )}
 
       {/* Loading */}
       {isLoading && (
