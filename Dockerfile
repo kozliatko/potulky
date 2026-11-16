@@ -34,6 +34,12 @@ COPY backend/ .
 # Frontend build do public/
 COPY --from=frontend-builder /frontend/dist ./public
 
+# Debian bezpečnostné opravy novšie ako základný obraz. npm/npx appka pri behu
+# nepoužíva (CMD je node server.js) a pribalený npm nesie zraniteľné undici
+# a brace-expansion, preto ho z finálneho obrazu odstraňujeme.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
+
 # Perzistentný adresár pre SQLite DB
 RUN mkdir -p /app/data && chown node:node /app/data
 
